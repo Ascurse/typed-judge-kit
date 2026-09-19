@@ -65,13 +65,17 @@ def test_heavily_weighted_defects_alone_can_push_off_ready():
         assert verdict != "ready", qid
 
 
-def test_overclaim_at_threshold_demotes_ready_to_light_edit():
-    assert v3.combine(with_defect(overclaim=v2.OVERCLAIM_THRESHOLD))[1] == "light_edit"
+# Поведение overclaim/unsourced изменено бидом wnh: в v2 overclaim лишь понижал ready до
+# light_edit, теперь критический класс — изолированное вето до heavy_edit, а unsourced входит
+# в тот же класс (было: не влияет). Порог тот же, OVERCLAIM_THRESHOLD из v2, не перекалиброван.
+def test_overclaim_at_threshold_vetoes_to_heavy_edit():
+    assert v3.combine(with_defect(overclaim=v2.OVERCLAIM_THRESHOLD))[1] == "heavy_edit"
     assert v3.combine(with_defect(overclaim=v2.OVERCLAIM_THRESHOLD - 0.01))[1] == "ready"
 
 
-def test_unsourced_and_loose_end_do_not_affect_verdict():
-    assert v3.combine(with_defect(unsourced=0.99, loose_end=0.99))[1] == "ready"
+def test_unsourced_vetoes_and_loose_end_counts_as_style_defect():
+    assert v3.combine(with_defect(unsourced=0.99))[1] == "heavy_edit"
+    assert v3.combine(with_defect(loose_end=0.99))[1] == "light_edit"
 
 
 def test_many_defects_together_reach_heavy_edit():

@@ -14,9 +14,10 @@ DR-63 (ранги 1-2, 7): атомарные бинарные проверки 
 - Флаги v2 (`overclaim`/`unsourced`/`loose_end`) перенесены как есть по смыслу и порогу
   (OVERCLAIM_THRESHOLD переиспользован из v2, не задан заново — Дауэс: пороги не крутим
   на тех же метках), но тоже получили explicit «Пример нарушения».
-- combine() — тот же взвешенный состав, что draft_lint.combine, только на бинарных
-  вероятностях-дефектах вместо шкалы/позитивных Noul (см. COT_FIRST_LIMITATION про то,
-  почему веса не заменены на единичные — это отдельный бид wnh, не дублируется здесь).
+- combine() — единичные веса по стилистическим дефектам + изолированное вето критического
+  класса (бид wnh, DR-63 ранги 3-4). Взвешенная формула v1/v2, перенесённая сюда изначально,
+  давала согласие на уровне случайности (6/14, p=0.883) — веса v2 калибровались под шкалу
+  Score/позитивные Noul и на инвертированные вероятности дефектов не переносятся.
 
 CoT-first (rank 2) — см. COT_FIRST_LIMITATION ниже: TypeSafe/Jev не возвращает текст.
 """
@@ -110,25 +111,34 @@ QUESTIONS: dict[str, Question] = {
 }
 
 
+# Агрегация v3 (бид typed-judge-kit-wnh, DR-63 ранги 3-4). Единичные веса вместо подогнанных
+# коэффициентов: на 14 метках подгонка весов — переобучение на шум (Dawes 1979). Пороги
+# зафиксированы в предрегистрации ДО прогона на метках (vault measurements/Агрегация v3
+# единичные веса — предрегистрация 2026-09-20.md) и по результату не крутятся.
+STYLE_DEFECTS = ("hook_weak", "no_evidence", "symmetry", "hedging", "generic_conclusion",
+                 "corporate_tone", "topic_sprawl", "loose_end")
+# Полуконъюнктивное вето: критический класс проверяется изолированно, а не складывается со
+# стилистикой. Конъюнктивное вето по ВСЕМ вопросам множило бы ложные браковки (1-(1-p)^n).
+CRITICAL_DEFECTS = ("overclaim", "unsourced")
+LIGHT_EDIT_AT = 1  # дефектов >= 1 -> light_edit
+HEAVY_EDIT_AT = 3  # дефектов >= 3 -> heavy_edit
+
+
 def combine(a: dict[str, Answer]) -> tuple[float, str]:
-    """1:1 по структуре с draft_lint.combine, но на бинарных дефект-вероятностях
-    вместо шкалы hook и позитивных evidence/tone/one_idea (инверсия: 1 - p(дефект)).
-    Веса и пороги — те же, что в draft_lint/v2 (единичные веса Дауэса — отдельный бид wnh,
-    здесь не трогаем: смена архитектуры агрегации не входит в rank 1-2/7)."""
-    hook = 1 - a["hook_weak"].probability
-    ev = 1 - a["no_evidence"].probability
-    sym, hd = a["symmetry"].probability, a["hedging"].probability
-    gen = a["generic_conclusion"].probability
-    tone = 1 - a["corporate_tone"].probability
-    idea = 1 - a["topic_sprawl"].probability
-    strength = 0.30 * hook + 0.25 * ev + 0.20 * tone + 0.15 * idea + 0.10 * (1 - gen)
-    composite = strength - 0.12 * sym - 0.12 * hd
-    if composite >= 0.72 and hook >= 0.6 and ev >= 0.6:
-        verdict = "ready"
-    elif composite < 0.5:
+    """Единичные веса по стилистическим дефектам + изолированное вето критического класса.
+
+    Бинаризация 0.5 — тот же порог, что в contamination.binarize для Noul. Verbalized
+    confidence в формулу не входит (DR-63 ранг 4). Критические вопросы в сумму не входят
+    вообще: они либо вето, либо ничего.
+    """
+    defects = sum(a[qid].probability >= 0.5 for qid in STYLE_DEFECTS)
+    score = 1 - defects / len(STYLE_DEFECTS)
+    if any(a[qid].probability >= OVERCLAIM_THRESHOLD for qid in CRITICAL_DEFECTS):
+        return round(score, 3), "heavy_edit"
+    if defects >= HEAVY_EDIT_AT:
         verdict = "heavy_edit"
+    elif defects >= LIGHT_EDIT_AT:
+        verdict = "light_edit"
     else:
-        verdict = "light_edit"
-    if verdict == "ready" and a["overclaim"].probability >= OVERCLAIM_THRESHOLD:
-        verdict = "light_edit"
-    return round(composite, 3), verdict
+        verdict = "ready"
+    return round(score, 3), verdict
