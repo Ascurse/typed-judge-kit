@@ -22,8 +22,9 @@ packages = ["src/typed_judge"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not network and not stress'"
+addopts = "-m 'not network and not stress and not stress_v2'"
 markers = [
     "network: требует реальных ключей API; гоняется вручную",
-    "stress: гейт стресс-набора h37 (пропуск критического → auto off); pytest -m stress",
+    "stress: гейт текущего конвейера на стресс-наборе h37 (пропуск критического → auto off); pytest -m stress",
+    "stress_v2: тот же гейт для draft_lint_v2 без шага claim-vs-evidence — исторический замер, остаётся красным",
 ]

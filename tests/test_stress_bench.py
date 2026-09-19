@@ -40,7 +40,7 @@ def test_flip_rate_on_live_cached_run_is_zero():
     assert flip_rate(_ru_pairs(), VERDICTS) == 0.0
 
 
-@pytest.mark.stress
+@pytest.mark.stress_v2
 def test_auto_off_gate_on_cached_stress_run():
     """Исполняемое правило DR-62 §3.2: пропуск хотя бы одного критического дефекта → auto off.
 
@@ -52,7 +52,9 @@ def test_auto_off_gate_on_cached_stress_run():
     а не статистикой на 14 метках.
 
     Тест НЕ подогнан под зелёный и НЕ помечен xfail: правило обязано падать, когда есть реальный пропуск.
-    Чтобы красный гейт не маскировал остальной набор, он под маркером stress и гоняется явно: pytest -m stress.
+    Он остаётся красным и после бида q36 — claim-vs-evidence это отдельный шаг конвейера, он не входит
+    в набор вопросов draft_lint_v2 и этот кэш о нём ничего не знает. Маркер stress_v2, чтобы красное
+    утверждение про v2 не смешивалось с гейтом текущего конвейера (pytest -m stress, test_claim_check.py).
     """
     status = auto_status(VERDICTS, CRITICAL_IDS)
     assert status.status == AUTO, f"auto off: пропущены критические фикстуры {status.missed}"
