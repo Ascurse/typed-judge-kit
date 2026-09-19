@@ -7,10 +7,16 @@ from .batch import Row
 from .verdict import Verdict
 
 
+def _cell(x) -> str:
+    """Значение ячейки может содержать | или перенос строки (текст ошибки движка) — экранируем, иначе таблица рвётся."""
+    return str(x).replace("|", "\\|").replace("\n", " ")
+
+
 def markdown(rows: list[Row], verdicts: list[Verdict]) -> str:
     lines = ["| item | verdict | score | error |", "|---|---|---|---|"]
     for v in verdicts:
-        lines.append(f"| {v.item_id} | {v.verdict} | {'' if v.score is None else v.score} | {v.error or ''} |")
+        lines.append(f"| {v.item_id} | {_cell(v.verdict)} | {'' if v.score is None else v.score} | "
+                      f"{_cell(v.error) if v.error else ''} |")
     errs = sum(1 for v in verdicts if v.error)
     lat = [r.latency_s for r in rows if r.latency_s]
     lines += ["", f"items: {len(verdicts)}, ошибок: {errs}, "
@@ -30,6 +36,6 @@ def compare(a: list[Verdict], b: list[Verdict]) -> str:
         n += 1
         same = va.verdict == vb.verdict
         ok += same
-        lines.append(f"| {va.item_id} | {va.verdict} | {vb.verdict} | {'✓' if same else '✗'} |")
+        lines.append(f"| {va.item_id} | {_cell(va.verdict)} | {_cell(vb.verdict)} | {'✓' if same else '✗'} |")
     lines += ["", f"совпало {ok}/{n}"]
     return "\n".join(lines)

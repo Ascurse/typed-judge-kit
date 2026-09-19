@@ -125,16 +125,21 @@ def main(argv: list[str] | None = None) -> int:
     v.set_defaults(fn=cmd_variants)
 
     p = sub.add_parser("report", help="markdown по кэшу или сравнение двух кэшей")
-    p.add_argument("--recipe", required=True); p.add_argument("--cache"); p.add_argument("--compare", nargs=2)
+    p.add_argument("--recipe", required=True)
+    pg = p.add_mutually_exclusive_group(required=True)
+    pg.add_argument("--cache"); pg.add_argument("--compare", nargs=2)
     p.set_defaults(fn=cmd_report)
 
-    a = ap.parse_args(argv)
     try:
+        a = ap.parse_args(argv)
         return a.fn(a)
     except SystemExit as e:
         if e.code not in (0, None):
             print(e, file=sys.stderr)
         return 2 if isinstance(e.code, str) else int(e.code or 0)
+    except (ImportError, OSError) as e:
+        print(e, file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
