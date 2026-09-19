@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "typed_judge_kit",
+  "project_id": "883361b1-b2ed-4105-8353-95cc7c7e426e"
+}
