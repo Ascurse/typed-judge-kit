@@ -46,3 +46,31 @@ def test_engine_exception_becomes_error_row(tmp_path):
 def test_no_cache_path_still_runs():
     rows = run(FakeEngine(), ITEMS, Q, None)
     assert len(rows) == 2
+
+
+class _Flaky:
+    name = "flaky"
+
+    def __init__(self):
+        self.calls = 0
+
+    def ask(self, state, questions):
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("HTTP 500")
+        return FakeEngine().ask(state, questions)
+
+
+def test_error_row_is_not_cached_and_retried(tmp_path):
+    e = _Flaky()
+    first = run(e, {"a": "текст"}, Q, tmp_path / "r.jsonl")
+    assert first[0].error == "HTTP 500"
+    second = run(e, {"a": "текст"}, Q, tmp_path / "r.jsonl")
+    assert e.calls == 2 and second[0].error is None
+
+
+def test_cache_hit_keeps_current_item_id(tmp_path):
+    e = FakeEngine()
+    run(e, {"a": "одинаковый текст"}, Q, tmp_path / "r.jsonl")
+    rows = run(e, {"c": "одинаковый текст"}, Q, tmp_path / "r.jsonl")
+    assert e.calls == 1 and rows[0].item_id == "c"

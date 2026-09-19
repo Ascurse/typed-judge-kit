@@ -5,7 +5,7 @@ import hashlib
 import json
 import pathlib
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 
 from .engines import Engine
 from .questions import Answer, Choice, Question, Score, question_kind
@@ -59,13 +59,13 @@ def read_rows(path: pathlib.Path) -> list[Row]:
 
 def run(engine: Engine, items: dict[str, str], questions: dict[str, Question],
         cache_path: pathlib.Path | None) -> list[Row]:
-    cached = {r.key: r for r in read_rows(cache_path)} if cache_path else {}
+    cached = {r.key: r for r in read_rows(cache_path) if not r.error} if cache_path else {}
     out: list[Row] = []
     new: list[Row] = []
     for item_id, state in items.items():
         key = cache_key(engine.name, state, questions)
-        if key in cached:
-            out.append(cached[key])
+        if key in cached and not cached[key].error:
+            out.append(replace(cached[key], item_id=item_id))
             continue
         t0 = time.monotonic()
         try:
@@ -75,7 +75,8 @@ def run(engine: Engine, items: dict[str, str], questions: dict[str, Question],
         except Exception as e:  # noqa: BLE001 — ошибка движка становится строкой, не падением прогона
             row = Row(item_id, key, engine.name, {}, 0, 0, time.monotonic() - t0, str(e))
         out.append(row)
-        new.append(row)
+        if not row.error:  # ошибка движка не кэшируется, иначе сбой станет постоянным
+            new.append(row)
     if cache_path and new:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         with cache_path.open("a", encoding="utf-8") as f:
