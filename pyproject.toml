@@ -1,6 +1,6 @@
 [project]
 name = "typed-judge"
-version = "0.1.1"
+version = "0.2.0"
 description = "Typed questions to a model, one batched call, verdict in code, thresholds calibrated on your own labels."
 readme = "README.md"
 license = "MIT"

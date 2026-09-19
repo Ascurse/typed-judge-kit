@@ -66,6 +66,8 @@ Thresholds calibrated on a handful of labels don't generalize. 3/4 or 3/5 agreem
 
 `typed_judge.recipes.draft_lint` is the bundled recipe: 10 questions (`hook`, `evidence`, `symmetry`, `hedging`, `generic_conclusion`, `tone`, `one_idea`, `top_defect`, `readiness`, `better_as_thread`) plus a `combine()` formula (weighted composite of hook/evidence/tone/one_idea/generic_conclusion, penalized by symmetry/hedging, gated by hook and evidence floors) that maps answers to `ready` / `light_edit` / `heavy_edit`. `VARIANTS`/`COMBINES` also expose a `holistic` (single readiness question) and `factor_en` (English phrasing) variant for the `tj variants` A/B table.
 
+`typed_judge.recipes.screen_incoming` is a guardrail for incoming text (forwards, web pages) before an agent stores or acts on it: 4 questions (`injection`, `relevance`, `noise`, and a 0–3 `hazard` score) mapped to `block` / `skip` / `pass` / `review`. Injection ≥ 0.5 or hazard ≥ 2 blocks outright; noise ≥ 0.6 skips; otherwise relevance decides. On 6 real items (typesafe `jev-latest`, $0.0002 total) it blocked both injection samples and skipped the promo. Its `relevance` question describes one person's research scope — rewrite it for yours.
+
 To calibrate on your own labels: write a `labels.json` with `{"labels": {"<item_id>": "<verdict>"}}` and run `tj calibrate --recipe typed_judge.recipes.draft_lint --cache <your-cache.jsonl> --labels labels.json`. Weights and thresholds live in `combine()` in code, not in the prompt — change the formula, not the model's instructions.
 
 ## License
