@@ -4,11 +4,14 @@
 фикстурах tests/fixtures/stress/fixtures.json, вероятности читаются напрямую (не через
 combine()/вердикт) и сводятся в таблицы typed_judge.question_calibration.
 
-Две таблицы, потому что истина у классов вопросов разная (бид k55):
+Таблицы, потому что истина у вопросов разная:
 - стилистические — пары ru_messy/ru_clean, separation по ним;
-- критические (overclaim) — минимальные пары base/overclaim, дописанный вывод сильнее данных.
-  В ru_messy/ru_clean прямой истины по overclaim нет, и до k55 по нему меряли только ложные
-  срабатывания.
+- критические (overclaim, бид k55) — минимальные пары base/overclaim, дописанный вывод сильнее
+  данных. В ru_messy/ru_clean прямой истины по overclaim нет, и до k55 по нему меряли только
+  ложные срабатывания;
+- целевые стилистические (topic_sprawl, loose_end; бид 0py) — минимальные пары base/<дефект>:
+  в ru-парах ни расползания, ни оборванной недосказанности нет, separation по ним был нулевой
+  от отсутствия данных, а не от вопроса.
 
 Метки 14 черновиков (labels.json) НЕ участвуют — они holdout по условию бида. Кэш — отдельный
 от stress_bench.py (тот гоняет draft_lint_v2 с другим набором вопросов, другой cache_key).
@@ -53,11 +56,13 @@ QUESTION_IDS = STYLE_DEFECTS + CRITICAL_DEFECTS  # порядок отчёта
 # стиль, а не сила вывода, и в отрицательный класс их брать нельзя без отдельной разметки.
 CRITICAL_POSITIVE_KIND = "overclaim"
 CRITICAL_NEGATIVE_KINDS = ("base",)
+# Бид 0py: вопрос -> kind положительного класса; отрицательный тот же — base без дописанного.
+TARGETED_KINDS = {"topic_sprawl": "topic_sprawl", "loose_end": "loose_end"}
 
 # По одному представителю каждой группы фикстур (ru_messy/ru_clean/base/critical) —
 # smoke только оценивает стоимость на item, полное покрытие групп ему не нужно.
 SMOKE_IDS = ["ru-01-messy", "ru-01-clean", "base-01-inbox", "base-01-inbox-negation_flip",
-             "base-01-inbox-overclaim"]
+             "base-01-inbox-overclaim", "base-01-inbox-topic_sprawl", "base-01-inbox-loose_end"]
 
 
 def table_heading() -> str:
@@ -69,6 +74,10 @@ def crit_heading() -> str:
             f"{CRITICAL_POSITIVE_KIND}, бид k55)")
 
 
+def targeted_heading(qid: str) -> str:
+    return f"### Целевой стилистический вопрос {qid} (истина — пары base/{TARGETED_KINDS[qid]}, бид 0py)"
+
+
 def load_fixtures() -> dict:
     return json.loads(FIXTURES.read_text(encoding="utf-8"))
 
@@ -76,7 +85,7 @@ def load_fixtures() -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     g = ap.add_mutually_exclusive_group(required=True)
-    g.add_argument("--smoke", action="store_true", help="5 фикстур — прикинуть стоимость перед полным прогоном")
+    g.add_argument("--smoke", action="store_true", help="7 фикстур — прикинуть стоимость перед полным прогоном")
     g.add_argument("--full", action="store_true", help="все фикстуры; проверяет оценку из --smoke против бюджета")
     a = ap.parse_args(argv)
 
@@ -116,6 +125,9 @@ def main(argv: list[str] | None = None) -> int:
                      negative_kinds=CRITICAL_NEGATIVE_KINDS) for qid in CRITICAL_DEFECTS]
     text = (f"{table_heading()}\n\n{markdown_table(table)}\n\n{crit_heading()}\n\n"
             f"{markdown_kind_table(crit, CRITICAL_POSITIVE_KIND, CRITICAL_NEGATIVE_KINDS)}")
+    for qid, kind in TARGETED_KINDS.items():
+        row = kind_row(answers_by_item, data, qid, positive_kind=kind, negative_kinds=CRITICAL_NEGATIVE_KINDS)
+        text += f"\n\n{targeted_heading(qid)}\n\n{markdown_kind_table([row], kind, CRITICAL_NEGATIVE_KINDS)}"
     print(text)
     (OUT_DIR / "table.md").write_text(text + "\n", encoding="utf-8")
     (OUT_DIR / "cost.json").write_text(json.dumps({"cost_usd": cost, "n_rows": len(rows)}, indent=1), encoding="utf-8")

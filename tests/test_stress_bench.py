@@ -63,16 +63,17 @@ def _pairs_of_kind(kind: str) -> list[tuple[dict, dict]]:
     return [(by_id[it["base_id"]], it) for it in DATA["items"] if it["kind"] == kind]
 
 
-def test_overclaim_pairs_differ_from_base_only_by_appended_claim():
-    """Бид k55: положительный класс по overclaim — тот же base-текст плюс вывод сильнее данных.
+@pytest.mark.parametrize("kind", ["overclaim", "topic_sprawl", "loose_end"])
+def test_defect_pairs_differ_from_base_only_by_appended_tail(kind):
+    """Биды k55/0py: положительный класс — тот же base-текст плюс дописанный фрагмент с дефектом.
 
     Пара обязана быть минимальной: если фикстура не начинается с base-текста дословно, значит
-    изменились и факты или стиль, и separation по overclaim будет мерить не то.
+    изменились и факты или стиль, и separation будет мерить не то.
     """
-    pairs = _pairs_of_kind("overclaim")
-    assert len(pairs) == 5, f"ожидалось 5 пар под overclaim, есть {len(pairs)}"
-    for base, over in pairs:
-        assert base["kind"] == "base", f"{over['id']}: base_id ведёт на {base['kind']}"
-        assert over["text"].startswith(base["text"]), (
-            f"{over['id']}: текст не начинается с base-текста — пара не минимальна")
-        assert len(over["text"]) > len(base["text"]), f"{over['id']}: вывод не дописан"
+    pairs = _pairs_of_kind(kind)
+    assert len(pairs) == 5, f"ожидалось 5 пар под {kind}, есть {len(pairs)}"
+    for base, pos in pairs:
+        assert base["kind"] == "base", f"{pos['id']}: base_id ведёт на {base['kind']}"
+        assert pos["text"].startswith(base["text"]), (
+            f"{pos['id']}: текст не начинается с base-текста — пара не минимальна")
+        assert len(pos["text"]) > len(base["text"]), f"{pos['id']}: фрагмент не дописан"
