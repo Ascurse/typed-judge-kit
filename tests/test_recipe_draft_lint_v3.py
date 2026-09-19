@@ -70,8 +70,10 @@ def test_heavily_weighted_defects_alone_can_push_off_ready():
 # Поведение overclaim изменено бидом wnh: в v2 overclaim лишь понижал ready до
 # light_edit, теперь критический класс — изолированное вето до heavy_edit, а unsourced входил
 # в тот же класс (было: не влияет). Порог тот же, OVERCLAIM_THRESHOLD из v2, не перекалиброван.
-def test_overclaim_at_threshold_vetoes_to_heavy_edit():
-    assert v3.combine(with_defect(overclaim=v2.OVERCLAIM_THRESHOLD))[1] == "heavy_edit"
+def test_overclaim_at_threshold_downgrades_ready_to_light_edit():
+    # бид ov0: порог 0.76 калибровался в роли «ready -> light_edit» (draft_lint_v2.combine),
+    # последствие heavy_edit, которое поставил wnh, не калибровалось ничем
+    assert v3.combine(with_defect(overclaim=v2.OVERCLAIM_THRESHOLD))[1] == "light_edit"
     assert v3.combine(with_defect(overclaim=v2.OVERCLAIM_THRESHOLD - 0.01))[1] == "ready"
 
 
@@ -133,5 +135,6 @@ def test_sourceless_claim_alone_does_not_change_the_verdict():
     assert v3.combine(strong)[1] == "ready"
 
 
-def test_overclaim_alone_still_vetoes():
-    assert v3.combine(_answers(overclaim=0.9))[1] == "heavy_edit"
+def test_overclaim_alone_downgrades_but_never_to_heavy_edit():
+    # бид ov0: на 14 метках вето давало 9 heavy_edit при нуле heavy_edit среди меток
+    assert v3.combine(_answers(overclaim=0.9))[1] == "light_edit"

@@ -42,16 +42,38 @@ def test_unit_weights_defects_are_interchangeable():
 
 
 @pytest.mark.parametrize("qid", ["overclaim"])  # бид 08p: unsourced выведен из вето
-def test_critical_vetoes_any_score(qid):
-    """critical=1 при любом score → вето (вердикт heavy_edit даже на идеальном стиле)."""
+def test_critical_downgrades_ready_to_light_edit(qid):
+    """Бид ov0: порог 0.76 калибровался в роли «ready → light_edit» (draft_lint_v2.combine).
+
+    Последствие heavy_edit, которое поставил wnh, для этого порога не калибровалось ничем.
+    """
     score, verdict = v3.combine(answers(**{qid: v3.OVERCLAIM_THRESHOLD}))
-    assert verdict == "heavy_edit"
-    assert score == 1.0, "вето не подменяет score — оно меняет только вердикт"
+    assert verdict == "light_edit"
+    assert score == 1.0, "понижение не подменяет score — оно меняет только вердикт"
 
 
 @pytest.mark.parametrize("qid", ["overclaim"])
-def test_critical_below_threshold_does_not_veto(qid):
+def test_critical_below_threshold_does_not_downgrade(qid):
     assert v3.combine(answers(**{qid: v3.OVERCLAIM_THRESHOLD - 0.01}))[1] == "ready"
+
+
+@pytest.mark.parametrize("qid", ["overclaim"])
+def test_critical_never_creates_heavy_edit(qid):
+    """Бид ov0: на 14 метках вето давало 9 heavy_edit при нуле heavy_edit в метках.
+
+    Сам по себе критический вопрос не может поднять вердикт выше light_edit — heavy_edit
+    остаётся зоной счёта стилистических дефектов (>= HEAVY_EDIT_AT).
+    """
+    for n in range(v3.HEAVY_EDIT_AT):  # 0..2 стилистических дефекта — база ready/light_edit
+        a = answers(**{q: 0.9 for q in v3.STYLE_DEFECTS[:n]} | {qid: 1.0})
+        assert v3.combine(a)[1] != "heavy_edit", f"{n} стилистических + {qid}=1.0 дало heavy_edit"
+
+
+@pytest.mark.parametrize("qid", ["overclaim"])
+def test_critical_does_not_lower_existing_heavy_edit(qid):
+    """Понижение применяется только к ready: heavy_edit по стилистике остаётся heavy_edit."""
+    a = answers(**{q: 0.9 for q in v3.STYLE_DEFECTS[:v3.HEAVY_EDIT_AT]} | {qid: 1.0})
+    assert v3.combine(a)[1] == "heavy_edit"
 
 
 def test_critical_not_counted_in_additive_sum():
