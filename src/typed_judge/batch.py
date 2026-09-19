@@ -75,6 +75,17 @@ def _tail_is_unterminated(path: pathlib.Path) -> bool:
         return f.read(1) != b"\n"
 
 
+def append_cache(cache_path: pathlib.Path, new: list[Row]) -> None:
+    if not (cache_path and new):
+        return
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    with cache_path.open("a", encoding="utf-8") as f:
+        if _tail_is_unterminated(cache_path):  # оборванная запись: без \n первая новая строка склеилась бы с обрывком
+            f.write("\n")
+        for row in new:
+            f.write(json.dumps(row.to_dict(), ensure_ascii=False) + "\n")
+
+
 def run(engine: Engine, items: dict[str, str], questions: dict[str, Question],
         cache_path: pathlib.Path | None) -> list[Row]:
     cached = {r.key: r for r in read_rows(cache_path) if not r.error} if cache_path else {}
@@ -95,11 +106,5 @@ def run(engine: Engine, items: dict[str, str], questions: dict[str, Question],
         out.append(row)
         if not row.error:  # ошибка движка не кэшируется, иначе сбой станет постоянным
             new.append(row)
-    if cache_path and new:
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        with cache_path.open("a", encoding="utf-8") as f:
-            if _tail_is_unterminated(cache_path):  # оборванная запись: без \n первая новая строка склеилась бы с обрывком
-                f.write("\n")
-            for row in new:
-                f.write(json.dumps(row.to_dict(), ensure_ascii=False) + "\n")
+    append_cache(cache_path, new)
     return out
