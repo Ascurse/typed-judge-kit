@@ -61,6 +61,12 @@ def test_unknown_engine_exits_2():
     assert main(["run", "--recipe", "typed_judge.recipes.draft_lint", "--engine", "nope", "--cache", "x.jsonl", "f.md"]) == 2
 
 
+def test_argparse_error_has_no_stray_exit_code_line(capsys):
+    assert main(["report"]) == 2
+    err = capsys.readouterr().err.strip().splitlines()
+    assert err and err[-1] != "2"
+
+
 def test_report_without_cache_or_compare_exits_2():
     assert main(["report", "--recipe", "typed_judge.recipes.draft_lint"]) == 2
 

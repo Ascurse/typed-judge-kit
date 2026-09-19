@@ -15,7 +15,7 @@ RETRY_CODES = (429, 500, 502, 503)
 
 
 def cost_usd(input_tokens: int) -> float:
-    return round(input_tokens * PRICE_PER_MTOKEN / 1e6, 5)
+    return input_tokens * PRICE_PER_MTOKEN / 1e6
 
 
 def to_typesafe(questions: dict[str, Question]) -> dict:
@@ -76,10 +76,12 @@ class TypeSafeEngine:
             except urllib.error.HTTPError as e:
                 last = f"HTTP {e.code}: {e.read().decode()[:300]}"
                 if e.code in RETRY_CODES:
-                    self.sleep(5 + 5 * i)
+                    if i < self.attempts - 1:
+                        self.sleep(5 + 5 * i)
                     continue
                 break
             except Exception as e:  # noqa: BLE001 — сеть/таймаут: ретрай с паузой
                 last = f"{type(e).__name__}: {e}"
-                self.sleep(3 + 3 * i)
+                if i < self.attempts - 1:
+                    self.sleep(3 + 3 * i)
         return Result(error=last)

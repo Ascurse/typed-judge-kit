@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import pathlib
+import sys
 import time
 from dataclasses import asdict, dataclass, field, replace
 
@@ -54,7 +55,24 @@ class Row:
 def read_rows(path: pathlib.Path) -> list[Row]:
     if not path.exists():
         return []
-    return [Row.from_dict(json.loads(line)) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows = []
+    # обрыв записи оставляет неполный utf-8 (errors="replace"); splitlines() резал бы валидные строки по U+2028 и т. п.
+    for n, line in enumerate(path.read_text(encoding="utf-8", errors="replace").split("\n"), 1):
+        if not line.strip():
+            continue
+        try:
+            rows.append(Row.from_dict(json.loads(line)))
+        except (ValueError, KeyError, TypeError, AttributeError) as e:  # ValueError покрывает JSONDecodeError
+            print(f"кэш {path}: строка {n} не разобрана, пропущена ({type(e).__name__}: {e})", file=sys.stderr)
+    return rows
+
+
+def _tail_is_unterminated(path: pathlib.Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    with path.open("rb") as f:
+        f.seek(-1, 2)
+        return f.read(1) != b"\n"
 
 
 def run(engine: Engine, items: dict[str, str], questions: dict[str, Question],
@@ -80,6 +98,8 @@ def run(engine: Engine, items: dict[str, str], questions: dict[str, Question],
     if cache_path and new:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         with cache_path.open("a", encoding="utf-8") as f:
+            if _tail_is_unterminated(cache_path):  # оборванная запись: без \n первая новая строка склеилась бы с обрывком
+                f.write("\n")
             for row in new:
                 f.write(json.dumps(row.to_dict(), ensure_ascii=False) + "\n")
     return out

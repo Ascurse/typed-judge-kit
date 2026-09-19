@@ -4,12 +4,30 @@ from __future__ import annotations
 import statistics
 
 from .batch import Row
+from .engines import gemini, typesafe
 from .verdict import Verdict
 
 
 def _cell(x) -> str:
     """Значение ячейки может содержать | или перенос строки (текст ошибки движка) — экранируем, иначе таблица рвётся."""
     return str(x).replace("|", "\\|").replace("\n", " ")
+
+
+def _cost(rows: list[Row]) -> float | None:
+    """Сумма по строкам; если хоть одну строку оценить нельзя (fake, незнакомая модель) — None, а не заниженная сумма."""
+    total = 0.0
+    for r in rows:
+        kind, _, model = r.engine.partition(":")
+        if kind == "typesafe":
+            c = typesafe.cost_usd(r.input_tokens)
+        elif kind == "gemini":
+            c = gemini.cost_usd(model, r.input_tokens, r.output_tokens)
+        else:
+            c = None
+        if c is None:
+            return None
+        total += c
+    return total
 
 
 def markdown(rows: list[Row], verdicts: list[Verdict]) -> str:
@@ -19,9 +37,11 @@ def markdown(rows: list[Row], verdicts: list[Verdict]) -> str:
                       f"{_cell(v.error) if v.error else ''} |")
     errs = sum(1 for v in verdicts if v.error)
     lat = [r.latency_s for r in rows if r.latency_s]
+    cost = _cost(rows)
     lines += ["", f"items: {len(verdicts)}, ошибок: {errs}, "
                   f"токены in/out: {sum(r.input_tokens for r in rows)}/{sum(r.output_tokens for r in rows)}, "
-                  f"медиана latency: {round(statistics.median(lat), 3) if lat else '-'} с"]
+                  f"медиана latency: {round(statistics.median(lat), 3) if lat else '-'} с, "
+                  f"стоимость: {'-' if cost is None else f'${cost:.5f}'}"]
     return "\n".join(lines)
 
 

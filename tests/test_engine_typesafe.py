@@ -52,6 +52,14 @@ def test_retry_on_429_then_success():
     assert r.error is None and slept == [5]
 
 
+def test_no_sleep_after_last_failed_attempt():
+    http = FakeHTTP([429, 429])
+    slept = []
+    e = TypeSafeEngine(key="k-1234", attempts=2, urlopen=lambda req, timeout: _ctx(http(req, timeout)), sleep=slept.append)
+    r = e.ask("текст", Q)
+    assert r.error is not None and slept == [5]
+
+
 def test_missing_answer_is_error_not_default():
     resp = {"answers": {"hook": RESP["answers"]["hook"]}, "usage": {}}
     http = FakeHTTP([resp])
@@ -70,7 +78,7 @@ def test_null_choice_is_error_not_stringified():
 
 
 def test_cost():
-    assert cost_usd(21087) == 0.00089
+    assert cost_usd(21087) == pytest.approx(0.000885654)
 
 
 class _ctx:

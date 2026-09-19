@@ -9,8 +9,21 @@ import urllib.request
 from . import Result, load_key
 from ..questions import Answer, Choice, Noul, Question, Score
 
+# USD за 1M токенов (input, output), стандартный платный тариф. Цены на 2026-09-16,
+# источник: https://ai.google.dev/gemini-api/docs/pricing. Output-цена включает thinking-токены, а thoughtsTokenCount
+# в сумму не входит — при thinkingLevel MINIMAL их доля мала, стоимость слегка занижена. Free-tier бесплатен,
+# здесь — условная стоимость на платном.
+PRICE_PER_MTOKEN = {"gemini-3.5-flash-lite": (0.30, 2.50)}
+
 PREAMBLE = ("Ниже — state. Ответь на заданные вопросы как отдельные независимые мгновенные суждения о нём. "
             "Верни только значения, без объяснений.")
+
+
+def cost_usd(model: str, input_tokens: int, output_tokens: int) -> float | None:
+    if model not in PRICE_PER_MTOKEN:
+        return None
+    pin, pout = PRICE_PER_MTOKEN[model]
+    return (input_tokens * pin + output_tokens * pout) / 1e6
 
 
 def build_schema(questions: dict[str, Question]) -> dict:
@@ -107,7 +120,8 @@ class GeminiEngine:
                     continue
                 self.last = self.clock()
                 if e.code == 429:
-                    self.sleep(25 + 5 * i)
+                    if i < self.attempts - 1:
+                        self.sleep(25 + 5 * i)
                     continue
                 break
             except (KeyError, IndexError, ValueError) as e:

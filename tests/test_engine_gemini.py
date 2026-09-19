@@ -4,7 +4,7 @@ import urllib.error
 
 import pytest
 
-from typed_judge.engines.gemini import GeminiEngine, build_prompt, build_schema
+from typed_judge.engines.gemini import GeminiEngine, build_prompt, build_schema, cost_usd
 from typed_judge.questions import Choice, Noul, Score
 
 Q = {"hook": Score("хук?", ("нет", "слабый", "рабочий", "сильный")),
@@ -69,6 +69,14 @@ def test_400_drops_thinking_and_retries_without_sleep():
     assert "thinkingConfig" not in http.requests[1]["generationConfig"]
 
 
+def test_no_sleep_after_last_429():
+    http = FakeHTTP([429, 429])
+    slept = []
+    e = GeminiEngine(key="g-1234", attempts=2, urlopen=http, sleep=slept.append, clock=lambda: 1000.0)
+    r = e.ask("ТЕКСТ", Q)
+    assert r.error is not None and slept == [25, 4.5]  # 4.5 — пейсинг перед 2-й попыткой; паузы 30 после последней 429 нет
+
+
 def test_pacing_between_calls():
     http = FakeHTTP([gemini_payload({"hook": {"score": 1, "confidence": 0.5}, "evidence": {"p": 0.1},
                                      "readiness": {"value": "ready", "confidence": 0.5}})] * 2)
@@ -97,3 +105,11 @@ def test_null_choice_value_is_rejected():
 def test_live_three_types():
     r = GeminiEngine().ask("Короткий текст с числом: за 3 месяца R@5 вырос с 13% до 93%.", Q)
     assert r.answers["hook"].value is not None and r.answers["evidence"].probability is not None
+
+
+def test_cost_by_hand_calculated_price():
+    assert cost_usd("gemini-3.5-flash-lite", 781, 226) == pytest.approx(0.0007993)
+
+
+def test_cost_unknown_model_is_none():
+    assert cost_usd("gemini-unknown", 781, 226) is None

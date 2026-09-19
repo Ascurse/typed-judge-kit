@@ -1,4 +1,6 @@
-from typed_judge.batch import cache_key, read_rows, run
+import json
+
+from typed_judge.batch import Row, cache_key, read_rows, run
 from typed_judge.engines.fake import FakeEngine
 from typed_judge.questions import Choice, Noul, Score
 
@@ -74,3 +76,37 @@ def test_cache_hit_keeps_current_item_id(tmp_path):
     run(e, {"a": "одинаковый текст"}, Q, tmp_path / "r.jsonl")
     rows = run(e, {"c": "одинаковый текст"}, Q, tmp_path / "r.jsonl")
     assert e.calls == 1 and rows[0].item_id == "c"
+
+
+def test_read_rows_skips_broken_lines_with_warning(tmp_path, capsys):
+    good = Row("a", "k1", "fake").to_dict()
+    path = tmp_path / "r.jsonl"
+    path.write_text("\n".join([json.dumps(good), "{bad", json.dumps({"item_id": "x"}), json.dumps(good)]) + "\n",
+                    encoding="utf-8")
+    rows = read_rows(path)
+    err = capsys.readouterr().err
+    assert len(rows) == 2
+    assert "строка 2" in err and "строка 3" in err and str(path) in err
+
+
+def test_read_rows_survives_truncated_utf8_tail(tmp_path, capsys):
+    good = json.dumps(Row("a", "k1", "fake").to_dict(), ensure_ascii=False)
+    path = tmp_path / "r.jsonl"
+    path.write_bytes(good.encode() + b"\n" + b'{"item_id": "\xd0')  # обрыв посреди кириллической буквы
+    assert len(read_rows(path)) == 1
+    assert "строка 2" in capsys.readouterr().err
+
+
+def test_read_rows_keeps_line_with_unicode_line_separator(tmp_path, capsys):
+    path = tmp_path / "r.jsonl"
+    path.write_text(json.dumps(Row("x\u2028y", "k1", "fake").to_dict(), ensure_ascii=False) + "\n", encoding="utf-8")
+    rows = read_rows(path)
+    assert [r.item_id for r in rows] == ["x\u2028y"] and capsys.readouterr().err == ""
+
+
+def test_run_appends_on_new_line_after_truncated_tail(tmp_path):
+    good = json.dumps(Row("a", "k1", "fake").to_dict(), ensure_ascii=False)
+    path = tmp_path / "r.jsonl"
+    path.write_text(good + "\n" + good[:20], encoding="utf-8")  # хвост оборван без \n
+    run(FakeEngine(), {"b": "новый текст"}, Q, path)
+    assert [r.item_id for r in read_rows(path)] == ["a", "b"]

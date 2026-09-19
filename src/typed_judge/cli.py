@@ -134,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
         a = ap.parse_args(argv)
         return a.fn(a)
     except SystemExit as e:
-        if e.code not in (0, None):
+        if isinstance(e.code, str):  # int-код (argparse) уже сопровождён его собственным сообщением
             print(e, file=sys.stderr)
         return 2 if isinstance(e.code, str) else int(e.code or 0)
     except (ImportError, OSError) as e:
