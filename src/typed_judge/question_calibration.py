@@ -171,3 +171,39 @@ def markdown_kind_table(rows: list[KindRow], positive_kind: str,
             f"{_fmt(r.positive_mean_prob)} | {_fmt(r.negative_mean_prob)} |"
         )
     return "\n".join(lines)
+
+
+@dataclass
+class PairedShift:
+    """Сдвиг вероятностей одного вопроса от переформулировки (бид p6g).
+
+    Пары — по item_id: один и тот же текст, два прогона с разной формулировкой вопроса.
+    Сравнивать средние по прогонам недостаточно — они скрывают разнонаправленные сдвиги;
+    n_flips считает то, что реально меняет вердикт: переход через порог.
+    """
+    qid: str
+    threshold: float
+    n: int
+    mean_delta: float | None
+    max_abs_delta: float | None
+    fire_rate_a: float | None
+    fire_rate_b: float | None
+    n_flips: int
+
+
+def paired_shift(answers_a: dict[str, dict[str, Answer]], answers_b: dict[str, dict[str, Answer]],
+                 qid: str, *, threshold: float) -> PairedShift:
+    pairs = []
+    for item_id in answers_a:
+        a, b = _answer(answers_a, item_id, qid), _answer(answers_b, item_id, qid)
+        if a is not None and b is not None:
+            pairs.append((a.probability, b.probability))
+    deltas = [pb - pa for pa, pb in pairs]
+    rate = lambda ps: None if not ps else round(sum(p >= threshold for p in ps) / len(ps), 3)  # noqa: E731
+    return PairedShift(
+        qid=qid, threshold=threshold, n=len(pairs),
+        mean_delta=None if not deltas else round(sum(deltas) / len(deltas), 3),
+        max_abs_delta=None if not deltas else round(max(abs(d) for d in deltas), 3),
+        fire_rate_a=rate([pa for pa, _ in pairs]), fire_rate_b=rate([pb for _, pb in pairs]),
+        n_flips=sum((pa >= threshold) != (pb >= threshold) for pa, pb in pairs),
+    )

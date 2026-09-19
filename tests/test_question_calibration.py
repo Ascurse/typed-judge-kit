@@ -8,6 +8,7 @@
 from typed_judge.question_calibration import (
     binarize,
     kind_row,
+    paired_shift,
     markdown_table,
     question_table,
 )
@@ -141,3 +142,34 @@ def test_kind_row_skips_answers_with_errors():
     }
     row = kind_row(answers, fixtures, "overclaim", positive_kind="overclaim", negative_kinds=("base",))
     assert row.n_positive == 1, "ответ с ошибкой не должен молча считаться нулём"
+
+
+# --- бид p6g: сдвиг распределения от переформулировки вопроса ---
+
+
+def test_paired_shift_pairs_items_by_id_and_reports_flips_at_threshold():
+    a = {"i1": {"overclaim": Answer(probability=0.80)},
+         "i2": {"overclaim": Answer(probability=0.50)},
+         "i3": {"overclaim": Answer(probability=0.90)}}
+    b = {"i1": {"overclaim": Answer(probability=0.60)},
+         "i2": {"overclaim": Answer(probability=0.55)},
+         "i3": {"overclaim": Answer(probability=0.95)}}
+    r = paired_shift(a, b, "overclaim", threshold=0.76)
+    assert r.n == 3
+    assert r.mean_delta == round((-0.20 + 0.05 + 0.05) / 3, 3)
+    assert r.max_abs_delta == 0.2
+    assert r.fire_rate_a == round(2 / 3, 3)
+    assert r.fire_rate_b == round(1 / 3, 3)
+    assert r.n_flips == 1  # i1: 0.80 >= 0.76, 0.60 < 0.76
+
+
+def test_paired_shift_skips_items_missing_or_errored_in_either_run():
+    a = {"i1": {"overclaim": Answer(probability=0.8)},
+         "i2": {"overclaim": Answer(probability=0.8)},
+         "i3": {"overclaim": Answer(error="boom")}}
+    b = {"i1": {"overclaim": Answer(probability=0.8)},
+         "i3": {"overclaim": Answer(probability=0.8)}}
+    r = paired_shift(a, b, "overclaim", threshold=0.76)
+    assert r.n == 1
+    assert r.mean_delta == 0.0
+    assert r.n_flips == 0
