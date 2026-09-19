@@ -111,6 +111,36 @@ def question_table(answers_by_item: dict[str, dict[str, Answer]], fixtures: dict
     return rows
 
 
+@dataclass
+class KindRow:
+    """Разделение классов, заданных не парой messy/clean, а парой kind'ов фикстур.
+
+    Нужна критическим вопросам (бид k55): у overclaim прямой истины в ru_messy/ru_clean нет,
+    зато есть минимальные пары base/overclaim — тот же текст с дописанным перегибом.
+    """
+    qid: str
+    n_positive: int
+    n_negative: int
+    positive_fire_rate: float | None
+    negative_fire_rate: float | None
+    separation: float | None
+    positive_mean_prob: float | None
+    negative_mean_prob: float | None
+
+
+def kind_row(answers_by_item: dict[str, dict[str, Answer]], fixtures: dict, qid: str, *,
+             positive_kind: str, negative_kinds: tuple[str, ...]) -> KindRow:
+    pos = _probs(answers_by_item, _ids_of_kind(fixtures, positive_kind), qid)
+    neg = [p for k in negative_kinds for p in _probs(answers_by_item, _ids_of_kind(fixtures, k), qid)]
+    pos_rate, neg_rate = _fire_rate(pos), _fire_rate(neg)
+    return KindRow(
+        qid=qid, n_positive=len(pos), n_negative=len(neg),
+        positive_fire_rate=pos_rate, negative_fire_rate=neg_rate,
+        separation=None if pos_rate is None or neg_rate is None else round(pos_rate - neg_rate, 3),
+        positive_mean_prob=_mean(pos), negative_mean_prob=_mean(neg),
+    )
+
+
 def _fmt(x: float | None) -> str:
     return "-" if x is None else f"{x:.3f}"
 
@@ -125,5 +155,19 @@ def markdown_table(rows: list[QuestionRow]) -> str:
             f"| {r.qid} | {_fmt(r.messy_fire_rate)} ({r.n_messy}) | {_fmt(r.clean_fire_rate)} ({r.n_clean}) | "
             f"{_fmt(r.separation)} | {_fmt(r.messy_mean_prob)} | {_fmt(r.clean_mean_prob)} | "
             f"{_fmt(r.control_disagreement_rate)} ({r.n_control_pairs}) |"
+        )
+    return "\n".join(lines)
+
+
+def markdown_kind_table(rows: list[KindRow], positive_kind: str,
+                        negative_kinds: tuple[str, ...]) -> str:
+    neg = "+".join(negative_kinds)
+    lines = [f"| вопрос | {positive_kind} fire (n) | {neg} fire (n) | separation | "
+             f"{positive_kind} mean p | {neg} mean p |", "|---|---|---|---|---|---|"]
+    for r in rows:
+        lines.append(
+            f"| {r.qid} | {_fmt(r.positive_fire_rate)} ({r.n_positive}) | "
+            f"{_fmt(r.negative_fire_rate)} ({r.n_negative}) | {_fmt(r.separation)} | "
+            f"{_fmt(r.positive_mean_prob)} | {_fmt(r.negative_mean_prob)} |"
         )
     return "\n".join(lines)

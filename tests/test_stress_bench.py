@@ -56,3 +56,23 @@ def test_auto_off_gate_on_cached_stress_run():
     """
     status = auto_status(VERDICTS, CRITICAL_IDS)
     assert status.status == AUTO, f"auto off: пропущены критические фикстуры {status.missed}"
+
+
+def _pairs_of_kind(kind: str) -> list[tuple[dict, dict]]:
+    by_id = {it["id"]: it for it in DATA["items"]}
+    return [(by_id[it["base_id"]], it) for it in DATA["items"] if it["kind"] == kind]
+
+
+def test_overclaim_pairs_differ_from_base_only_by_appended_claim():
+    """Бид k55: положительный класс по overclaim — тот же base-текст плюс вывод сильнее данных.
+
+    Пара обязана быть минимальной: если фикстура не начинается с base-текста дословно, значит
+    изменились и факты или стиль, и separation по overclaim будет мерить не то.
+    """
+    pairs = _pairs_of_kind("overclaim")
+    assert len(pairs) == 5, f"ожидалось 5 пар под overclaim, есть {len(pairs)}"
+    for base, over in pairs:
+        assert base["kind"] == "base", f"{over['id']}: base_id ведёт на {base['kind']}"
+        assert over["text"].startswith(base["text"]), (
+            f"{over['id']}: текст не начинается с base-текста — пара не минимальна")
+        assert len(over["text"]) > len(base["text"]), f"{over['id']}: вывод не дописан"

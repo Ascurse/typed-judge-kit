@@ -5,7 +5,12 @@
 - base/critical пары (общий base_id) — контроль на шум: стиль идентичен, различаются
   только фактом, поэтому расхождение бинаризованного ответа на такой паре — шум.
 """
-from typed_judge.question_calibration import binarize, markdown_table, question_table
+from typed_judge.question_calibration import (
+    binarize,
+    kind_row,
+    markdown_table,
+    question_table,
+)
 from typed_judge.questions import Answer
 
 
@@ -92,3 +97,47 @@ def test_markdown_table_renders_dash_for_missing_values():
     assert "hedging" in text
     assert "-" in text
     assert text.startswith("| вопрос |")
+
+
+def _fx_overclaim(pairs) -> dict:
+    """pairs: список (base_id, overclaim_id) — минимальные пары под критический вопрос."""
+    items = []
+    for base_id, over_id in pairs:
+        items.append({"id": base_id, "kind": "base"})
+        items.append({"id": over_id, "kind": "overclaim", "base_id": base_id})
+    return {"items": items}
+
+
+def test_kind_row_separates_positive_kind_from_negative_kinds():
+    """Бид k55: у критического вопроса истина задана парой kind'ов, а не messy/clean."""
+    fixtures = _fx_overclaim([("b1", "o1"), ("b2", "o2")])
+    answers = {
+        "o1": {"overclaim": Answer(probability=0.9)},
+        "o2": {"overclaim": Answer(probability=0.8)},
+        "b1": {"overclaim": Answer(probability=0.2)},
+        "b2": {"overclaim": Answer(probability=0.1)},
+    }
+    row = kind_row(answers, fixtures, "overclaim", positive_kind="overclaim", negative_kinds=("base",))
+    assert (row.n_positive, row.n_negative) == (2, 2)
+    assert (row.positive_fire_rate, row.negative_fire_rate) == (1.0, 0.0)
+    assert row.separation == 1.0
+    assert row.positive_mean_prob == 0.85
+
+
+def test_kind_row_separation_is_zero_when_question_cannot_tell_classes_apart():
+    fixtures = _fx_overclaim([("b1", "o1"), ("b2", "o2")])
+    answers = {i: {"overclaim": Answer(probability=0.9)} for i in ("o1", "o2", "b1", "b2")}
+    row = kind_row(answers, fixtures, "overclaim", positive_kind="overclaim", negative_kinds=("base",))
+    assert row.separation == 0.0
+
+
+def test_kind_row_skips_answers_with_errors():
+    fixtures = _fx_overclaim([("b1", "o1"), ("b2", "o2")])
+    answers = {
+        "o1": {"overclaim": Answer(probability=0.9)},
+        "o2": {"overclaim": Answer(error="движок упал")},
+        "b1": {"overclaim": Answer(probability=0.1)},
+        "b2": {"overclaim": Answer(probability=0.1)},
+    }
+    row = kind_row(answers, fixtures, "overclaim", positive_kind="overclaim", negative_kinds=("base",))
+    assert row.n_positive == 1, "ответ с ошибкой не должен молча считаться нулём"
