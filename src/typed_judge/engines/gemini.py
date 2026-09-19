@@ -51,7 +51,10 @@ def parse_answers(obj: dict, questions: dict[str, Question]) -> dict[str, Answer
             continue
         try:
             if isinstance(q, Choice):
-                out[qid] = Answer(value=str(a["value"]), confidence=a.get("confidence"), raw=a)
+                c = a["value"]
+                if not isinstance(c, str):
+                    raise TypeError(f"value: {c!r}")
+                out[qid] = Answer(value=c, confidence=a.get("confidence"), raw=a)
             elif isinstance(q, Score):
                 out[qid] = Answer(value=float(a["score"]), confidence=a.get("confidence"), raw=a)
             else:
@@ -107,6 +110,6 @@ class GeminiEngine:
                     self.sleep(25 + 5 * i)
                     continue
                 break
-            except (KeyError, ValueError, json.JSONDecodeError) as e:
+            except (KeyError, IndexError, ValueError) as e:
                 return Result(error=f"ответ Gemini не разобран: {type(e).__name__}: {e}")
         return Result(error=last)

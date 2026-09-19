@@ -80,6 +80,19 @@ def test_pacing_between_calls():
     assert len(slept) == 1 and abs(slept[0] - 3.5) < 1e-6
 
 
+def test_empty_candidates_becomes_error_not_exception():
+    http = FakeHTTP([{"candidates": [], "usageMetadata": {}}])
+    r = engine(http).ask("ТЕКСТ", Q)
+    assert r.error is not None and "не разобран" in r.error
+
+
+def test_null_choice_value_is_rejected():
+    http = FakeHTTP([gemini_payload({"hook": {"score": 1, "confidence": 0.5}, "evidence": {"p": 0.1},
+                                     "readiness": {"value": None, "confidence": 0.5}})])
+    r = engine(http).ask("ТЕКСТ", Q)
+    assert r.answers["readiness"].error is not None and r.answers["readiness"].value is None
+
+
 @pytest.mark.network
 def test_live_three_types():
     r = GeminiEngine().ask("Короткий текст с числом: за 3 месяца R@5 вырос с 13% до 93%.", Q)
