@@ -2,7 +2,7 @@
 dist/
 __pycache__/
 *.jsonl
-!tests/fixtures/*.jsonl
+!tests/fixtures/**/*.jsonl
 .hypothesis/
 
 # Beads / Dolt files (added by bd init)

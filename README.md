@@ -91,6 +91,8 @@ Typed judgments are a **gate or classifier**, not a **ranker on top of already-g
 
 Thresholds calibrated on a handful of labels don't generalize. 3/4 or 3/5 agreement on a tiny label set is not a result to report as "the calibration works" — see the claim table above for how many labels each kind of statistical statement actually needs.
 
+`draft_lint` judges writing, not facts. On 25 synthetic drafts with a forced critical defect (flipped negation, swapped date/name/number, semantic absurdity) `draft_lint_v2` said `ready` to 20 of them (`tests/fixtures/stress/`, 2026-09-20). The rule "one missed critical defect → `auto` off" is executable: `pytest -m stress` (red today, on purpose).
+
 ## Recipes
 
 `typed_judge.recipes.draft_lint` is the bundled recipe: 10 questions (`hook`, `evidence`, `symmetry`, `hedging`, `generic_conclusion`, `tone`, `one_idea`, `top_defect`, `readiness`, `better_as_thread`) plus a `combine()` formula (weighted composite of hook/evidence/tone/one_idea/generic_conclusion, penalized by symmetry/hedging, gated by hook and evidence floors) that maps answers to `ready` / `light_edit` / `heavy_edit`. `VARIANTS`/`COMBINES` also expose a `holistic` (single readiness question) and `factor_en` (English phrasing) variant for the `tj variants` A/B table.
