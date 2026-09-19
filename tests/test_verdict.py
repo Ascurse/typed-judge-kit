@@ -23,3 +23,11 @@ def test_error_row_and_missing_answer_go_to_human():
     v = apply(rows, combine)
     assert [x.verdict for x in v] == [HUMAN, HUMAN, HUMAN]
     assert v[0].error == "HTTP 500" and "hook" in v[1].error and v[2].error
+
+
+def test_none_value_in_present_answer_goes_to_human():
+    from typed_judge.batch import Row
+    from typed_judge.questions import Answer
+    row = Row("n", "k", "fake", {"hook": Answer(value=None)})
+    v = apply([row], lambda a: (a["hook"].value / 3, "ready"))
+    assert v[0].verdict == HUMAN and "TypeError" in v[0].error
