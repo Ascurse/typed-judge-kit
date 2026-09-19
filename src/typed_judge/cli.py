@@ -8,7 +8,7 @@ import json
 import pathlib
 import sys
 
-from . import batch, calibrate, report
+from . import batch, blind_duplicates, calibrate, diffing, mqm, report
 from .engines.fake import FakeEngine
 from .verdict import HUMAN, Verdict, apply
 
@@ -73,12 +73,20 @@ def cmd_calibrate(a) -> int:
     rows = batch.read_rows(pathlib.Path(a.cache))
     verdicts = apply(rows, recipe.combine)
     raw = json.loads(pathlib.Path(a.labels).read_text(encoding="utf-8"))
-    calib_labels, holdout_labels = calibrate.split_holdout(raw.get("labels", {}), raw.get("holdout", []))
+    # mqm.plain_verdicts — читает и старую форму метки (строка), и новую (verdict+category, DR-62 §1.6)
+    calib_labels, holdout_labels = calibrate.split_holdout(mqm.plain_verdicts(raw.get("labels", {})),
+                                                             raw.get("holdout", []))
     positive = getattr(recipe, "LABEL_POSITIVE", "ready")
     t = calibrate.fit_thresholds(verdicts, calib_labels, positive=positive)
-    print(calibrate.report_text(verdicts, calib_labels, holdout_labels, t))
+    rater_pairs = blind_duplicates.rater_pairs_from_doc(raw) or None
+    print(calibrate.report_text(verdicts, calib_labels, holdout_labels, t, rater_pairs=rater_pairs))
     if a.out:
         pathlib.Path(a.out).write_text(json.dumps(t.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    return 0
+
+
+def cmd_diff_published(a) -> int:
+    print(diffing.published_report(pathlib.Path(a.vault_root)))
     return 0
 
 
@@ -120,6 +128,10 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--recipe", required=True); c.add_argument("--cache", required=True)
     c.add_argument("--labels", required=True); c.add_argument("--out")
     c.set_defaults(fn=cmd_calibrate)
+
+    d = sub.add_parser("diff-published", help="дифф черновик↔опубликованная версия по vault, отчёт стиль/факт")
+    d.add_argument("--vault-root", required=True)
+    d.set_defaults(fn=cmd_diff_published)
 
     v = sub.add_parser("variants", help="один item, несколько формулировок — таблица вердиктов")
     v.add_argument("--recipe", required=True); v.add_argument("--engine", default="fake")

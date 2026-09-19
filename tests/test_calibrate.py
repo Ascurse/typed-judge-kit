@@ -137,6 +137,23 @@ def test_report_includes_kappa_only_when_pairs_given():
     assert "каппа" in text_with_pairs
 
 
+def test_kappa_reliable_wording_gated_below_25_pairs():
+    v, L = synth(20, 0)
+    t = fit_thresholds(v, L, positive="ready")
+    pairs = [("a", "a")] * 10  # n=10 < 25
+    text = report_text(v, L, {}, t, rater_pairs=pairs)
+    assert "устойчивая согласованность" not in text
+    assert "n=10" in text and "< 25" in text
+
+
+def test_kappa_reliable_wording_allowed_at_25_plus_pairs():
+    v, L = synth(20, 0)
+    t = fit_thresholds(v, L, positive="ready")
+    pairs = [("a", "a")] * 25  # n=25, идеальное согласие
+    text = report_text(v, L, {}, t, rater_pairs=pairs)
+    assert "устойчивая согласованность" in text
+
+
 def test_report_marks_holdout_explicitly():
     v, L = synth(20, 0)
     calib, holdout = L, {"h0": "ready", "h1": "edit"}

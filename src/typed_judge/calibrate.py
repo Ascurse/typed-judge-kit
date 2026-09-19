@@ -18,6 +18,8 @@ ALPHA_DEFAULT = 0.05
 # Границы режимов отчёта — фиксированы спекой DR-62, не зависят от alpha.
 REPORT_MIN_N = 19
 REPORT_INTERVAL_N = 50
+# «Устойчивая согласованность» по каппе — только при 25+ парах слепого тест-ретеста (DR-62 §1.7).
+RATER_PAIRS_RELIABLE_MIN = 25
 
 
 def _labeled(verdicts: list[Verdict], labels: dict[str, str]) -> list[tuple[Verdict, str]]:
@@ -159,6 +161,12 @@ def report_text(verdicts: list[Verdict], calib_labels: dict[str, str], holdout_l
 
     if rater_pairs:
         kappa = cohens_kappa(rater_pairs)
-        lines.append(f"каппа Коэна (слепой тест-ретест): {kappa:.2f} (n={len(rater_pairs)} пар)")
+        n_pairs = len(rater_pairs)
+        line = f"каппа Коэна (слепой тест-ретест): {kappa:.2f} (n={n_pairs} пар)"
+        if n_pairs >= RATER_PAIRS_RELIABLE_MIN:
+            line += " — устойчивая согласованность разметчика"
+        else:
+            line += f" — ⚠ n={n_pairs} < {RATER_PAIRS_RELIABLE_MIN}: рано говорить об устойчивой согласованности"
+        lines.append(line)
 
     return "\n".join(lines)

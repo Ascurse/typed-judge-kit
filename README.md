@@ -67,7 +67,13 @@ The report itself has three fixed modes, keyed on the calibration `n` (not count
 | `19–50` | `ожидаемый риск <= alpha, точечные метрики справочно` — a CRC threshold is shown, but point precision/coverage are reference-only, not statistically certified. |
 | `50+` | adds a two-sided Clopper–Pearson confidence interval for the auto zone's precision (stdlib only — no scipy; the beta quantile is found by bisection on the binomial CDF). |
 
-A `cohens_kappa(pairs)` function computes inter-rater agreement for blind test-retest label pairs (protocol: see the labeling task); `report_text` prints a `каппа Коэна` line only when such pairs are actually passed in — there's no pair data yet, so today's reports omit it.
+A `cohens_kappa(pairs)` function computes inter-rater agreement for blind test-retest label pairs; `report_text` prints a `каппа Коэна` line only when such pairs are actually passed in, and only calls the agreement "устойчивая согласованность" (reliable) once `n >= 25` pairs — below that it prints a `⚠ n=N < 25` warning instead (`RATER_PAIRS_RELIABLE_MIN`).
+
+**v2 (DR-62 §1.6–1.7, разметка v2): three more pieces, all backward-compatible and all reused via `tj calibrate`/`labels.json` without touching `calibrate.py`'s core logic.**
+
+- **MQM-lite defect categories** (`mqm.py`). A label in `labels.json` can stay a plain string (`"ready"`) or become `{"verdict": "...", "category": "critical" | "major" | "minor"}` (`critical` = a number/fact/legal-risk edit). `mqm.plain_verdicts()` strips categories before handing labels to `calibrate.py`, so old files and `calibrate.py` itself are untouched. The rule "critical → heavy_edit" is deliberately **not** implemented here — that's v3 aggregation.
+- **Draft ↔ published diff tool** (`diffing.py`, `tj diff-published --vault-root <path>`). Computes an HTER proxy (`difflib` word-level edit distance / draft length) split into style vs. fact edits by a regex NER filter (digits/dates/percents, or a capitalized word not at a sentence start). Candidate labels are printed for owner confirmation and never written to `labels.json`. It only computes a real diff when the publication note has a `## Опубликованный текст` section with the actual post text — a note that only *describes* the publication (this vault's current two posts) is not diffed against the draft, since that comparison is two unrelated texts, not an edit distance.
+- **Blind duplicates** (`blind_duplicates.py`). `schedule_blind_duplicates()` mixes one previously-labeled item (labeled ≥14 days ago) into every ~5 new ones, for undisclosed re-labeling; `record_retest()`/`rater_pairs_from_doc()` store and read the resulting (first, retest) pairs from a new `labels.json` field, `"retest_pairs"` (absent = empty, backward-compatible). `tj calibrate` picks these up automatically and feeds them to `cohens_kappa`.
 
 ### Claim → method → minimum n
 
@@ -99,7 +105,7 @@ Thresholds calibrated on a handful of labels don't generalize. 3/4 or 3/5 agreem
 
 `typed_judge.recipes.screen_incoming` is a guardrail for incoming text (forwards, web pages) before an agent stores or acts on it: 4 questions (`injection`, `relevance`, `noise`, and a 0–3 `hazard` score) mapped to `block` / `skip` / `pass` / `review`. Injection ≥ 0.5 or hazard ≥ 2 blocks outright; noise ≥ 0.6 skips; otherwise relevance decides. On 6 real items (typesafe `jev-latest`, $0.0002 total) it blocked both injection samples and skipped the promo. Its `relevance` question describes one person's research scope — rewrite it for yours.
 
-To calibrate on your own labels: write a `labels.json` with `{"labels": {"<item_id>": "<verdict>"}}` and run `tj calibrate --recipe typed_judge.recipes.draft_lint --cache <your-cache.jsonl> --labels labels.json`. Weights and thresholds live in `combine()` in code, not in the prompt — change the formula, not the model's instructions.
+To calibrate on your own labels: write a `labels.json` with `{"labels": {"<item_id>": "<verdict>"}}` (or `{"<item_id>": {"verdict": "...", "category": "critical|major|minor"}}` for MQM-lite, see above) and run `tj calibrate --recipe typed_judge.recipes.draft_lint --cache <your-cache.jsonl> --labels labels.json`. Weights and thresholds live in `combine()` in code, not in the prompt — change the formula, not the model's instructions.
 
 ## License
 

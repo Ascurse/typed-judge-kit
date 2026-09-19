@@ -55,12 +55,46 @@ def test_calibrate_holdout_ids_excluded_from_calibration(tmp_path, capsys):
     assert json.loads((tmp_path / "t.json").read_text())["n"] == 1
 
 
+def test_calibrate_reads_mqm_dict_labels_backward_compatibly(tmp_path, capsys):
+    paths = write_drafts(tmp_path)
+    cache = tmp_path / "r.jsonl"
+    main(["run", "--recipe", "typed_judge.recipes.draft_lint", "--engine", "fake", "--cache", str(cache), *paths])
+    (tmp_path / "labels.json").write_text(json.dumps({
+        "labels": {"draft-0": "ready", "draft-1": {"verdict": "light_edit", "category": "minor"}},
+    }))
+    code = main(["calibrate", "--recipe", "typed_judge.recipes.draft_lint", "--cache", str(cache),
+                 "--labels", str(tmp_path / "labels.json")])
+    out = capsys.readouterr().out
+    assert code == 0 and "согласие вердикта с метками" in out and "/2" in out
+
+
+def test_calibrate_prints_kappa_from_retest_pairs_in_labels_json(tmp_path, capsys):
+    paths = write_drafts(tmp_path)
+    cache = tmp_path / "r.jsonl"
+    main(["run", "--recipe", "typed_judge.recipes.draft_lint", "--engine", "fake", "--cache", str(cache), *paths])
+    (tmp_path / "labels.json").write_text(json.dumps({
+        "labels": {"draft-0": "ready", "draft-1": "light_edit"},
+        "retest_pairs": [{"id": "x", "first": "ready", "retest": "ready"}],
+    }))
+    code = main(["calibrate", "--recipe", "typed_judge.recipes.draft_lint", "--cache", str(cache),
+                 "--labels", str(tmp_path / "labels.json")])
+    out = capsys.readouterr().out
+    assert code == 0 and "каппа Коэна" in out and "n=1" in out
+
+
 def test_variants_table(tmp_path, capsys):
     (path,) = write_drafts(tmp_path, 1)
     code = main(["variants", "--recipe", "typed_judge.recipes.draft_lint", "--engine", "fake",
                  "--cache", str(tmp_path / "r.jsonl"), path])
     out = capsys.readouterr().out
     assert code == 0 and "| factor |" in out and "| holistic |" in out and "| factor_en |" in out
+
+
+def test_diff_published_reports_no_posts_found(tmp_path, capsys):
+    (tmp_path / "output" / "Content" / "published").mkdir(parents=True)
+    code = main(["diff-published", "--vault-root", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 0 and "published-постов не найдено" in out
 
 
 def test_report_compare(tmp_path, capsys):
