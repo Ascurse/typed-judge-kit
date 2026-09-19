@@ -41,7 +41,7 @@ def test_unit_weights_defects_are_interchangeable():
     assert verdicts == {"light_edit"}
 
 
-@pytest.mark.parametrize("qid", ["overclaim", "unsourced"])
+@pytest.mark.parametrize("qid", ["overclaim"])  # бид 08p: unsourced выведен из вето
 def test_critical_vetoes_any_score(qid):
     """critical=1 при любом score → вето (вердикт heavy_edit даже на идеальном стиле)."""
     score, verdict = v3.combine(answers(**{qid: v3.OVERCLAIM_THRESHOLD}))
@@ -49,14 +49,14 @@ def test_critical_vetoes_any_score(qid):
     assert score == 1.0, "вето не подменяет score — оно меняет только вердикт"
 
 
-@pytest.mark.parametrize("qid", ["overclaim", "unsourced"])
+@pytest.mark.parametrize("qid", ["overclaim"])
 def test_critical_below_threshold_does_not_veto(qid):
     assert v3.combine(answers(**{qid: v3.OVERCLAIM_THRESHOLD - 0.01}))[1] == "ready"
 
 
 def test_critical_not_counted_in_additive_sum():
     """critical=0 → вердикт только от суммы стилистических; критические вопросы в сумму не входят."""
-    a = answers(overclaim=0.5, unsourced=0.5, hedging=0.9)
+    a = answers(overclaim=0.5, hedging=0.9)
     assert v3.combine(a) == (0.875, "light_edit")
 
 
@@ -75,4 +75,6 @@ def test_confidence_not_used():
 def test_classes_cover_all_probability_questions():
     """Ни один Noul-вопрос рецепта не потерян между классами."""
     noul_qids = {qid for qid, q in v3.QUESTIONS.items() if q.__class__.__name__ == "Noul"}
-    assert noul_qids - {"better_as_thread"} == set(v3.STYLE_DEFECTS) | set(v3.CRITICAL_DEFECTS)
+    assert noul_qids - {"better_as_thread"} == (
+        set(v3.STYLE_DEFECTS) | set(v3.CRITICAL_DEFECTS) | set(v3.REPORTED_ONLY)
+    )

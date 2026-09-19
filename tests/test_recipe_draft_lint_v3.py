@@ -4,7 +4,7 @@ from typed_judge.recipes import draft_lint_v2 as v2
 from typed_judge.recipes import draft_lint_v3 as v3
 
 DEFECT_QUESTIONS = ("hook_weak", "no_evidence", "symmetry", "hedging", "generic_conclusion",
-                    "corporate_tone", "topic_sprawl", "overclaim", "unsourced", "loose_end")
+                    "corporate_tone", "topic_sprawl", "overclaim", "has_claim", "loose_end")
 
 # "чистый" набор ответов без единого дефекта — должен остаться ready (аналог READY_BASE в v2).
 CLEAN = {
@@ -12,7 +12,8 @@ CLEAN = {
     "symmetry": Answer(probability=0.1), "hedging": Answer(probability=0.1),
     "generic_conclusion": Answer(probability=0.1), "corporate_tone": Answer(probability=0.1),
     "topic_sprawl": Answer(probability=0.1), "overclaim": Answer(probability=0.1),
-    "unsourced": Answer(probability=0.1), "loose_end": Answer(probability=0.1),
+    "has_claim": Answer(probability=0.1), "has_source": Answer(probability=0.9),
+    "loose_end": Answer(probability=0.1),
     "top_defect": Answer(value="none"), "readiness": Answer(value="ready"),
     "better_as_thread": Answer(probability=0.1),
 }
@@ -48,7 +49,8 @@ def test_no_score_questions_left_scale_judgments_are_binarized():
 def test_ten_questions_plus_three_v2_flags_all_present():
     assert set(v3.QUESTIONS) == {"hook_weak", "no_evidence", "symmetry", "hedging", "generic_conclusion",
                                  "corporate_tone", "topic_sprawl", "top_defect", "readiness",
-                                 "better_as_thread", "overclaim", "unsourced", "loose_end"}
+                                 "better_as_thread", "overclaim", "has_claim", "has_source",
+                                 "loose_end"}
 
 
 def test_clean_draft_is_ready():
@@ -61,20 +63,20 @@ def test_heavily_weighted_defects_alone_can_push_off_ready():
     # generic_conclusion/topic_sprawl) сами по себе — нет, это тоже поведение draft_lint,
     # не регресс v3 (см. test_many_defects_together_reach_heavy_edit для их совместного эффекта).
     for qid in ("hook_weak", "no_evidence", "corporate_tone"):
-        score, verdict = v3.combine(with_defect(**{qid: 0.95}))
+        _, verdict = v3.combine(with_defect(**{qid: 0.95}))
         assert verdict != "ready", qid
 
 
-# Поведение overclaim/unsourced изменено бидом wnh: в v2 overclaim лишь понижал ready до
-# light_edit, теперь критический класс — изолированное вето до heavy_edit, а unsourced входит
+# Поведение overclaim изменено бидом wnh: в v2 overclaim лишь понижал ready до
+# light_edit, теперь критический класс — изолированное вето до heavy_edit, а unsourced входил
 # в тот же класс (было: не влияет). Порог тот же, OVERCLAIM_THRESHOLD из v2, не перекалиброван.
 def test_overclaim_at_threshold_vetoes_to_heavy_edit():
     assert v3.combine(with_defect(overclaim=v2.OVERCLAIM_THRESHOLD))[1] == "heavy_edit"
     assert v3.combine(with_defect(overclaim=v2.OVERCLAIM_THRESHOLD - 0.01))[1] == "ready"
 
 
-def test_unsourced_vetoes_and_loose_end_counts_as_style_defect():
-    assert v3.combine(with_defect(unsourced=0.99))[1] == "heavy_edit"
+def test_loose_end_counts_as_style_defect():
+    # бид 08p: unsourced выведен из вето, его место в этом тесте занимать нечему
     assert v3.combine(with_defect(loose_end=0.99))[1] == "light_edit"
 
 
@@ -94,3 +96,42 @@ def test_cot_first_limitation_is_documented_not_faked():
 
 def test_label_positive_matches_convention():
     assert v3.LABEL_POSITIVE == dl.LABEL_POSITIVE == "ready"
+
+
+# --- бид typed-judge-kit-08p: unsourced расщеплён на has_claim/has_source и выведен из вето ---
+
+def _answers(**flags) -> dict[str, Answer]:
+    out = dict(CLEAN)
+    for k, p in flags.items():
+        out[k] = Answer(probability=p)
+    return out
+
+
+def test_unsourced_split_into_two_questions():
+    assert "unsourced" not in v3.QUESTIONS
+    assert isinstance(v3.QUESTIONS["has_claim"], Noul)
+    assert isinstance(v3.QUESTIONS["has_source"], Noul)
+
+
+def test_unsourced_probability_is_conjunction_claim_and_no_source():
+    # замер 08p: отдельный вопрос «есть утверждение без источника» модель читает как
+    # «есть утверждение» (separation -1.00). Конъюнкция двух вопросов даёт 0.65.
+    assert v3.unsourced_probability(_answers()) == 0.1 * (1 - 0.9)
+    assert v3.unsourced_probability(_answers(has_claim=0.9, has_source=0.05)) == 0.9 * 0.95
+
+
+def test_unsourced_is_not_in_the_veto():
+    # 0.35 ложных срабатываний на отрицательном классе — такому вопросу нельзя отдавать вердикт
+    assert "unsourced" not in v3.CRITICAL_DEFECTS
+    assert v3.CRITICAL_DEFECTS == ("overclaim",)
+
+
+def test_sourceless_claim_alone_does_not_change_the_verdict():
+    # вопрос считается и отдаётся наружу, но в вердикт не входит, пока нет откалиброванного порога
+    strong = _answers(has_claim=0.95, has_source=0.02)
+    assert v3.unsourced_probability(strong) > 0.9
+    assert v3.combine(strong)[1] == "ready"
+
+
+def test_overclaim_alone_still_vetoes():
+    assert v3.combine(_answers(overclaim=0.9))[1] == "heavy_edit"

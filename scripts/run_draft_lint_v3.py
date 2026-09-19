@@ -165,8 +165,12 @@ def main() -> int:
     g.add_argument("--smoke", action="store_true")
     g.add_argument("--full", action="store_true")
     g.add_argument("--analyze", action="store_true")
+    ap.add_argument("--out", help="каталог кэша; по умолчанию OUT_DIR замера zin")
     a = ap.parse_args()
 
+    global OUT_DIR
+    if a.out:
+        OUT_DIR = pathlib.Path(a.out)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     item_ids = ITEM_IDS[:1] if a.smoke else ITEM_IDS
     reps = (1,) if a.smoke else REPS
