@@ -52,15 +52,44 @@ Keys are read via `load_key()` and are never printed or logged — only `mask()`
 
 ## Calibration
 
-`tj calibrate --recipe <recipe> --cache <cache.jsonl> --labels <labels.json>` reads cached rows (no model calls), applies your recipe's `combine()`, and compares the resulting scores against your labels to fit two thresholds: `auto_at` (score above which the verdict is trusted without review) and `human_below` (score below which it always goes to a human). Between them is `flag`.
+`tj calibrate --recipe <recipe> --cache <cache.jsonl> --labels <labels.json>` reads cached rows (no model calls), applies your recipe's `combine()`, and compares the resulting scores against your labels to fit an `auto_at` threshold (score above which the verdict is trusted without review). Below it is `flag`/`human`.
 
-The `auto` zone requires precision ≥ 0.95 against your labels (`P_MIN` in `calibrate.py`) — a threshold that doesn't clear that bar is simply not offered. Below `n=20` labeled examples (`MIN_LABELS`) the report prints a `⚠ n=N < 20: пороги ненадёжны, копите метки` warning: the fitted thresholds are shown, but treat them as provisional until you have more labels.
+**v2 (DR-62): the old precision-on-the-same-points fitting was a data leak.** At `n=14`, "precision 1.0" proves nothing — the threshold was picked and scored on the same 14 examples. `calibrate.py` now does two things differently:
+
+- **Frozen holdout.** `labels.json` can carry a top-level `"holdout": [item_id, ...]` list. Those ids are excluded from threshold fitting and only ever show up in an audit line (`split_holdout`); everything else in `"labels"` is calibration data. Old `labels.json` files without a `"holdout"` key still work unchanged — every label goes to calibration, exactly like before.
+- **CRC threshold instead of point precision.** `auto_at` is the smallest score threshold whose Conformal Risk Control upper bound `(k+1)/(n+1) ≤ alpha` holds (`alpha=0.05` by default), where `k` is the error count in that auto zone and `n` the full calibration set — not the zone size, which is what makes the bound marginally valid (Angelopoulos et al., [arXiv:2208.02814](https://arxiv.org/abs/2208.02814)). A non-trivial threshold can only exist once `n >= (k+1)/alpha - 1`; otherwise the report prints `auto выключен, coverage 0` and no fitted threshold is offered as a recommendation.
+
+The report itself has three fixed modes, keyed on the calibration `n` (not counting holdout):
+
+| `n` | What gets printed |
+|---|---|
+| `< 19` | `сертификация невозможна, auto off` — no CRC threshold can exist at this size for any error count, full stop. |
+| `19–50` | `ожидаемый риск <= alpha, точечные метрики справочно` — a CRC threshold is shown, but point precision/coverage are reference-only, not statistically certified. |
+| `50+` | adds a two-sided Clopper–Pearson confidence interval for the auto zone's precision (stdlib only — no scipy; the beta quantile is found by bisection on the binomial CDF). |
+
+A `cohens_kappa(pairs)` function computes inter-rater agreement for blind test-retest label pairs (protocol: see the labeling task); `report_text` prints a `каппа Коэна` line only when such pairs are actually passed in — there's no pair data yet, so today's reports omit it.
+
+### Claim → method → minimum n
+
+Adapted from the DR-62 research synthesis (Angelopoulos & Bates 2107.07511; Angelopoulos et al. 2208.02814; Miller 2411.00640):
+
+| Claim | Method | Minimum n |
+|---|---|---|
+| Accuracy ≥ 90% / 95% / 99%, 95% confidence, 0 calibration errors | Clopper–Pearson, one-sided lower bound | 29 / 59 / 299 |
+| Accuracy ≥ 90% / 95% / 99%, 95% confidence, 1 calibration error | Clopper–Pearson, one-sided lower bound | 46 / 93 / 473 |
+| Two-sided 95% CI on precision, 0 / 1 / 2 errors | Clopper–Pearson, two-sided (`clopper_pearson`) | 72 / 110 / 142 |
+| Non-trivial CRC auto threshold, α=0.10, 0 / 1 / 2 errors | Conformal Risk Control (`fit_thresholds`) | 9 / 19 / 29 |
+| Non-trivial CRC auto threshold, α=0.05, 0 / 1 / 2 errors | Conformal Risk Control (`fit_thresholds`) | 19 / 39 / 59 |
+| Accuracy ≥ 95% without re-inflating α on weekly peeking, 0 / 1 / 2 errors | Anytime-valid betting confidence sequence | 45 / 72 / 98 |
+| Labeler self-agreement κ ≥ 0.7 | Blind test-retest, Cohen's κ (`cohens_kappa`) | 25 pairs |
+
+At `n=14` (the owner's original label set, now frozen as holdout — see above), none of these claims are certifiable; that's a correct status, not a regression.
 
 ## Where this does not work
 
 Typed judgments are a **gate or classifier**, not a **ranker on top of already-good retrieval**. A Noul-based reranker placed over fusion-retrieval's top-20 made results worse, not better: R@5 dropped from 14/15 to 13/15 (v1) and 12/15 (v2), MRR from 0.744 to 0.63. If retrieval is already decent, don't reach for a typed judgment to reorder it — use it to decide go/no-go or bucket instead.
 
-Thresholds calibrated on a handful of labels don't generalize. 3/4 or 3/5 agreement on a tiny label set is not a result to report as "the calibration works" — it's a reminder that you need more labels before the `auto` threshold means anything (see `MIN_LABELS = 20` above).
+Thresholds calibrated on a handful of labels don't generalize. 3/4 or 3/5 agreement on a tiny label set is not a result to report as "the calibration works" — see the claim table above for how many labels each kind of statistical statement actually needs.
 
 ## Recipes
 

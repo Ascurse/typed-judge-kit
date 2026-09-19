@@ -27,7 +27,7 @@ def test_run_then_rerun_uses_cache(tmp_path, capsys):
     assert (tmp_path / "verdicts.jsonl").exists()
 
 
-def test_calibrate_prints_agreement_and_warning(tmp_path, capsys):
+def test_calibrate_prints_agreement_and_certification_impossible(tmp_path, capsys):
     paths = write_drafts(tmp_path)
     cache = tmp_path / "r.jsonl"
     main(["run", "--recipe", "typed_judge.recipes.draft_lint", "--engine", "fake", "--cache", str(cache), *paths])
@@ -35,8 +35,24 @@ def test_calibrate_prints_agreement_and_warning(tmp_path, capsys):
     code = main(["calibrate", "--recipe", "typed_judge.recipes.draft_lint", "--cache", str(cache),
                  "--labels", str(tmp_path / "labels.json"), "--out", str(tmp_path / "t.json")])
     out = capsys.readouterr().out
-    assert code == 0 and "согласие вердикта с метками" in out and "/2" in out and "ненадёжны" in out
+    assert code == 0 and "согласие вердикта с метками" in out and "/2" in out
+    assert "сертификация невозможна, auto off" in out and "auto выключен" in out
     assert json.loads((tmp_path / "t.json").read_text())["n"] == 2
+
+
+def test_calibrate_holdout_ids_excluded_from_calibration(tmp_path, capsys):
+    paths = write_drafts(tmp_path)
+    cache = tmp_path / "r.jsonl"
+    main(["run", "--recipe", "typed_judge.recipes.draft_lint", "--engine", "fake", "--cache", str(cache), *paths])
+    (tmp_path / "labels.json").write_text(json.dumps({
+        "holdout": ["draft-0"],
+        "labels": {"draft-0": "ready", "draft-1": "light_edit"},
+    }))
+    code = main(["calibrate", "--recipe", "typed_judge.recipes.draft_lint", "--cache", str(cache),
+                 "--labels", str(tmp_path / "labels.json"), "--out", str(tmp_path / "t.json")])
+    out = capsys.readouterr().out
+    assert code == 0 and "holdout" in out and "не участвует в подборе порога" in out
+    assert json.loads((tmp_path / "t.json").read_text())["n"] == 1
 
 
 def test_variants_table(tmp_path, capsys):

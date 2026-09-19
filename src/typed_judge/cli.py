@@ -72,9 +72,11 @@ def cmd_calibrate(a) -> int:
     recipe = load_recipe(a.recipe)
     rows = batch.read_rows(pathlib.Path(a.cache))
     verdicts = apply(rows, recipe.combine)
-    labels = json.loads(pathlib.Path(a.labels).read_text(encoding="utf-8")).get("labels", {})
-    t = calibrate.fit_thresholds(verdicts, labels, positive=getattr(recipe, "LABEL_POSITIVE", "ready"))
-    print(calibrate.report_text(verdicts, labels, t))
+    raw = json.loads(pathlib.Path(a.labels).read_text(encoding="utf-8"))
+    calib_labels, holdout_labels = calibrate.split_holdout(raw.get("labels", {}), raw.get("holdout", []))
+    positive = getattr(recipe, "LABEL_POSITIVE", "ready")
+    t = calibrate.fit_thresholds(verdicts, calib_labels, positive=positive)
+    print(calibrate.report_text(verdicts, calib_labels, holdout_labels, t))
     if a.out:
         pathlib.Path(a.out).write_text(json.dumps(t.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
     return 0
