@@ -4,7 +4,7 @@ import urllib.error
 
 import pytest
 
-from typed_judge.engines.typesafe import API, TypeSafeEngine, cost_usd, to_typesafe
+from typed_judge.engines.typesafe import API, TypeSafeEngine, cost_usd
 from typed_judge.questions import Choice, Noul, Score
 
 Q = {"hook": Score("хук?", ("нет", "слабый", "рабочий", "сильный")),
@@ -35,9 +35,10 @@ def test_request_shape_and_parsing():
     r = e.ask("текст", Q)
     body = http.requests[0]
     assert body["model"] == "jev-latest" and body["state"] == "текст"
-    assert body["questions"] == to_typesafe(Q)
     assert body["questions"]["hook"] == {"type": "score", "instructions": "хук?", "criteria": ["нет", "слабый", "рабочий", "сильный"]}
     assert body["questions"]["evidence"] == {"type": "noul", "instructions": "есть факты"}
+    assert body["questions"]["readiness"] == {"type": "choice", "instructions": "куда?",
+                                               "criteria": {"ready": "публиковать", "light_edit": None}}
     assert r.answers["hook"].value == 2.49 and r.answers["evidence"].probability == 0.93
     assert r.answers["readiness"].value == "ready" and r.answers["readiness"].confidence == 0.52
     assert r.input_tokens == 2035 and e.name == "typesafe:jev-latest"
@@ -57,6 +58,15 @@ def test_missing_answer_is_error_not_default():
     e = TypeSafeEngine(key="k-1234", urlopen=lambda req, timeout: _ctx(http(req, timeout)), sleep=lambda s: None)
     r = e.ask("текст", Q)
     assert r.answers["evidence"].error and r.answers["evidence"].probability is None
+
+
+def test_null_choice_is_error_not_stringified():
+    resp = {"answers": {**RESP["answers"], "readiness": {"type": "choice", "choice": None, "confidence": 0.5}},
+            "usage": {}}
+    http = FakeHTTP([resp])
+    e = TypeSafeEngine(key="k-1234", urlopen=lambda req, timeout: _ctx(http(req, timeout)), sleep=lambda s: None)
+    r = e.ask("текст", Q)
+    assert r.answers["readiness"].error and r.answers["readiness"].value is None
 
 
 def test_cost():

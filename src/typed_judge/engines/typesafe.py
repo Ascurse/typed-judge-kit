@@ -40,7 +40,10 @@ def parse_answers(resp: dict, questions: dict[str, Question]) -> dict[str, Answe
             continue
         try:
             if isinstance(q, Choice):
-                out[qid] = Answer(value=str(a["choice"]), confidence=a.get("confidence"), raw=a)
+                c = a["choice"]
+                if not isinstance(c, str):
+                    raise TypeError(f"choice: {c!r}")
+                out[qid] = Answer(value=c, confidence=a.get("confidence"), raw=a)
             elif isinstance(q, Score):
                 out[qid] = Answer(value=float(a["score"]), confidence=a.get("confidence"), raw=a)
             else:
