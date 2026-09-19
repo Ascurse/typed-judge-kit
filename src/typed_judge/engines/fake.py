@@ -32,7 +32,7 @@ class FakeEngine:
         for qid, q in questions.items():
             u = _unit(state, qid)
             if isinstance(q, Noul):
-                out[qid] = Answer(probability=round(u, 4))
+                out[qid] = Answer(probability=min(round(u, 4), 0.9999))  # округление не должно дать 1.0
             elif isinstance(q, Score):
                 out[qid] = Answer(value=round(u * q.max, 2), confidence=0.9)
             elif isinstance(q, Choice):

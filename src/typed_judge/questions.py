@@ -9,6 +9,10 @@ class Choice:
     instructions: str
     options: dict[str, str | None]
 
+    def __post_init__(self) -> None:
+        if not self.options:
+            raise ValueError("Choice требует хотя бы одну опцию")
+
 
 @dataclass(frozen=True)
 class Score:

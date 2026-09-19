@@ -22,3 +22,9 @@ def test_answer_numeric():
 def test_answer_roundtrip():
     a = Answer(value="ready", confidence=0.5, raw={"x": 1})
     assert Answer.from_dict(a.to_dict()) == a
+
+
+def test_choice_rejects_empty_options():
+    import pytest
+    with pytest.raises(ValueError):
+        Choice("x", {})
