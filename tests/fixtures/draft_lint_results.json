@@ -1,0 +1,231 @@
+{
+  "summary": {
+    "model": "gemini-3.5-flash-lite",
+    "docs": 10,
+    "probe": {
+      "doc": "2026-09-04-memory-eval-reranker-thread-x",
+      "chars": 1361,
+      "sequential_sum_s": 10.921,
+      "sequential_median_s": 1.046,
+      "batched_median_s": 1.556,
+      "speedup": 7.0,
+      "seq_tokens_per_call": [
+        486,
+        30
+      ],
+      "batch_tokens": [
+        781,
+        226
+      ]
+    },
+    "totals": {
+      "calls": 10,
+      "in": 14984,
+      "out": 2242,
+      "time": 16.277682042040396
+    },
+    "hypothetical_cost_usd": 0.0101
+  },
+  "results": {
+    "2026-08-12-better-prompts-stopped-being-the-lever": {
+      "verdict_code": "light_edit",
+      "verdict_model": "ready",
+      "agreement": false,
+      "composite": 0.694,
+      "gate": "auto",
+      "confidence": 0.93,
+      "hook": 2,
+      "top_defect": "none",
+      "p": {
+        "evidence": 0.4,
+        "symmetry": 0.1,
+        "hedging": 0.05,
+        "generic_conclusion": 0.1,
+        "tone": 0.9,
+        "one_idea": 0.95,
+        "better_as_thread": 0.2
+      },
+      "time_s": 1.56
+    },
+    "2026-08-14-less-context-wins": {
+      "verdict_code": "light_edit",
+      "verdict_model": "ready",
+      "agreement": false,
+      "composite": 0.829,
+      "gate": "auto",
+      "confidence": 0.9,
+      "hook": 2,
+      "top_defect": "none",
+      "p": {
+        "evidence": 0.9,
+        "symmetry": 0.1,
+        "hedging": 0.05,
+        "generic_conclusion": 0.1,
+        "tone": 0.95,
+        "one_idea": 0.95,
+        "better_as_thread": 0.3
+      },
+      "time_s": 1.77
+    },
+    "2026-08-15-independent-dataset-written-by-the-registry": {
+      "verdict_code": "ready",
+      "verdict_model": "ready",
+      "agreement": true,
+      "composite": 0.969,
+      "gate": "auto",
+      "confidence": 0.93,
+      "hook": 3,
+      "top_defect": "none",
+      "p": {
+        "evidence": 0.99,
+        "symmetry": 0.05,
+        "hedging": 0.05,
+        "generic_conclusion": 0.05,
+        "tone": 0.95,
+        "one_idea": 0.99,
+        "better_as_thread": 0.1
+      },
+      "time_s": 1.58
+    },
+    "2026-08-15-showing-the-model-its-own-mistake": {
+      "verdict_code": "light_edit",
+      "verdict_model": "ready",
+      "agreement": false,
+      "composite": 0.834,
+      "gate": "auto",
+      "confidence": 0.88,
+      "hook": 2,
+      "top_defect": "none",
+      "p": {
+        "evidence": 0.95,
+        "symmetry": 0.1,
+        "hedging": 0.05,
+        "generic_conclusion": 0.1,
+        "tone": 0.95,
+        "one_idea": 0.9,
+        "better_as_thread": 0.7
+      },
+      "time_s": 1.62
+    },
+    "2026-08-15-the-cost-of-a-gate-is-the-rollback": {
+      "verdict_code": "ready",
+      "verdict_model": "ready",
+      "agreement": true,
+      "composite": 0.954,
+      "gate": "auto",
+      "confidence": 0.93,
+      "hook": 3,
+      "top_defect": "none",
+      "p": {
+        "evidence": 0.98,
+        "symmetry": 0.1,
+        "hedging": 0.05,
+        "generic_conclusion": 0.05,
+        "tone": 0.95,
+        "one_idea": 0.95,
+        "better_as_thread": 0.2
+      },
+      "time_s": 1.58
+    },
+    "2026-09-04-memory-eval-reader-abstention": {
+      "verdict_code": "ready",
+      "verdict_model": "ready",
+      "agreement": true,
+      "composite": 0.924,
+      "gate": "auto",
+      "confidence": 0.88,
+      "hook": 3,
+      "top_defect": "none",
+      "p": {
+        "evidence": 0.95,
+        "symmetry": 0.05,
+        "hedging": 0.1,
+        "generic_conclusion": 0.1,
+        "tone": 0.9,
+        "one_idea": 0.9,
+        "better_as_thread": 0.2
+      },
+      "time_s": 1.56
+    },
+    "2026-09-04-memory-eval-reranker-thread-x": {
+      "verdict_code": "ready",
+      "verdict_model": "ready",
+      "agreement": true,
+      "composite": 0.951,
+      "gate": "auto",
+      "confidence": 0.93,
+      "hook": 3,
+      "top_defect": "none",
+      "p": {
+        "evidence": 0.99,
+        "symmetry": 0.05,
+        "hedging": 0.05,
+        "generic_conclusion": 0.1,
+        "tone": 0.95,
+        "one_idea": 0.9,
+        "better_as_thread": 0.95
+      },
+      "time_s": 1.42
+    },
+    "2026-09-04-memory-eval-reranker": {
+      "verdict_code": "ready",
+      "verdict_model": "ready",
+      "agreement": true,
+      "composite": 0.924,
+      "gate": "auto",
+      "confidence": 0.88,
+      "hook": 3,
+      "top_defect": "none",
+      "p": {
+        "evidence": 0.95,
+        "symmetry": 0.1,
+        "hedging": 0.05,
+        "generic_conclusion": 0.1,
+        "tone": 0.9,
+        "one_idea": 0.9,
+        "better_as_thread": 0.2
+      },
+      "time_s": 1.62
+    },
+    "2026-09-14-second-brain-eval-substack": {
+      "verdict_code": "ready",
+      "verdict_model": "ready",
+      "agreement": true,
+      "composite": 0.934,
+      "gate": "auto",
+      "confidence": 0.88,
+      "hook": 3,
+      "top_defect": "none",
+      "p": {
+        "evidence": 0.95,
+        "symmetry": 0.1,
+        "hedging": 0.05,
+        "generic_conclusion": 0.1,
+        "tone": 0.95,
+        "one_idea": 0.9,
+        "better_as_thread": 0.7
+      },
+      "time_s": 1.78
+    },
+    "post-template-lesson-progress-tradeoff": {
+      "verdict_code": "heavy_edit",
+      "verdict_model": "heavy_edit",
+      "agreement": true,
+      "composite": 0.364,
+      "gate": "auto",
+      "confidence": 0.95,
+      "hook": 0,
+      "top_defect": "none",
+      "p": {
+        "evidence": 0.05,
+        "symmetry": 0.1,
+        "hedging": 0.1,
+        "generic_conclusion": 0.2,
+        "tone": 0.8,
+        "one_idea": 0.9,
+        "better_as_thread": 0.1
+      },
+      "time_s": 1.78
+    }
+  }
+}

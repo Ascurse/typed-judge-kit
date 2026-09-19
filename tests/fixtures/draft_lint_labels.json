@@ -1,0 +1,10 @@
+{
+  "note": "Метки владельца для калибровки судей. 2026-09-18: #2/#3/#5 = ready (решение владельца). 2026-09-19: из published-полей edits: — tiny-local-judge и reranker-thread-x = light_edit (точечные контентные правки до публикации; школа — конвейерные операции не считаются). Пополнять по мере публикаций (edits:) и явных решений.",
+  "labels": {
+    "2026-08-14-less-context-wins": "ready",
+    "2026-08-15-independent-dataset-written-by-the-registry": "ready",
+    "2026-08-15-the-cost-of-a-gate-is-the-rollback": "ready",
+    "2026-09-18-tiny-local-judge": "light_edit",
+    "2026-09-04-memory-eval-reranker-thread-x": "light_edit"
+  }
+}
