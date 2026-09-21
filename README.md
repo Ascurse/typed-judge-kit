@@ -105,7 +105,7 @@ Thresholds calibrated on a handful of labels don't generalize. 3/4 or 3/5 agreem
 
 `typed_judge.recipes.screen_incoming` is a guardrail for incoming text (forwards, web pages) before an agent stores or acts on it: 4 questions (`injection`, `relevance`, `noise`, and a 0–3 `hazard` score) mapped to `block` / `skip` / `pass` / `review`. Injection ≥ 0.5 or hazard ≥ 2 blocks outright; noise ≥ 0.6 skips; otherwise relevance decides. On 6 real items (typesafe `jev-latest`, $0.0002 total) it blocked both injection samples and skipped the promo. Its `relevance` question describes one person's research scope — rewrite it for yours.
 
-`typed_judge.recipes.draft_lint_v3` is an **experiment that did not work** — kept in the tree as a recorded negative result, not as a recommended recipe. It replaces the Score/positive-Noul questions with binary defect questions (each with an explicit "example of a violation"), and aggregates them with unit weights (count of style defects: 0 → `ready`, 1–2 → `light_edit`, ≥3 → `heavy_edit`) plus one critical question, `overclaim`, that downgrades `ready` to `light_edit` at ≥ 0.76. On the same 14 labels it agrees 6/14 (`rep1`; 8/14 on `rep2`/`rep3`, flip rate 0.14) against v2's 11/14, permutation p = 0.883 — chance level. Cause, from the cached run: the binary style questions fire almost never (across 14 drafts × 8 questions, no draft reaches the `heavy_edit` count of 3), so the additive part is dead and `overclaim` alone decides all 14 verdicts. Its 8/14 firing rate reproduces the label marginals (8 `light_edit` / 6 `ready`) without matching them item by item. The problem is the question wording and the inherited threshold, not the weights; `draft_lint_v2` stays the production recipe.
+`typed_judge.recipes.draft_lint_v3` is the recipe the rest of this section is about, and the one `pytest -m stress` certifies. It replaces the Score/positive-Noul questions with binary defect questions (each with an explicit "example of a violation"), and aggregates them with unit weights (count of style defects: 0 → `ready`, 1–2 → `light_edit`, ≥3 → `heavy_edit`) plus one critical question, `overclaim`, that downgrades `ready` to `light_edit` at ≥ 0.76. **It is worse than v2 on the owner's labels and better on the thing that matters.** On the same 14 labels it agrees 6/14 (`rep1`; 8/14 on `rep2`/`rep3`, flip rate 0.14) against v2's 11/14, permutation p = 0.883 — chance level. Cause, from the cached run: the binary style questions fire almost never (across 14 drafts × 8 questions, no draft reaches the `heavy_edit` count of 3), so the additive part is dead and `overclaim` alone decides all 14 verdicts. But those 14 labels are a frozen holdout that certifies nothing at that size, and on the gate that is executable — one missed critical defect turns `auto` off — v2 fails 20/25 and v3 + `claim_check` passes 25/25. So v3 is the default here and v2 stays in the tree as the recorded measurement it came from; `pytest -m stress_v2` keeps v2's red record runnable. v1 (`draft_lint`) remains as the demo recipe and the `tj variants` A/B example.
 
 Two earlier shapes of this recipe are recorded in the beads tracker rather than the code: `unsourced` as a single question that the model read as "a claim exists" (separation −1.00, split into `has_claim`/`has_source` in bead `08p`), and `overclaim` as a veto that set `heavy_edit` outright (bead `ov0`). The veto version used the threshold 0.76 that had been calibrated in v2 for a *different* consequence — downgrading `ready` to `light_edit` — so all 8 firings were guaranteed misses against a label set containing no `heavy_edit` at all. Restoring the calibrated consequence is what moved agreement from 3/14 to 6/14. `scripts/overclaim_veto_check.py` re-runs the fixture-level check from the cached h37 answers and exits non-zero if any firing ever produces `heavy_edit` again.
 
@@ -121,9 +121,46 @@ Bead `p6g` closed the last of the three transfer errors in v3: the threshold 0.7
 
 Bead `sqd` then ran `claim_check` on **real** pairs, which the synthetic run could not: 10 of the 14 drafts carry a `Source material` section — the owner's own working notes the post was written from, 87–249 words, shorter than the draft, differently worded and covering only part of it (`scripts/claim_check_drafts.py`, $0.0014). These posts were published, so there is no planted error to catch; what this measures is the false-fire rate that decides whether the step is usable as a veto at all. The holistic question fires on **1 of 10** (0.100) — usable, given its only consequence is downgrading `ready` to `light_edit`. The per-claim path flags **20 of 70** claims (0.286), which is too noisy to gate on, and that is the same verdict the synthetic run reached from the other side. Caveat: `extract_claims` caps at 8 claims and 8 of the 10 drafts hit that cap, so the per-claim number is a rate over truncated drafts, and one draft yields no claims at all under the current surface-feature rule.
 
+### Running the two optional steps
+
+Both extra steps are off by default: `tj run` without flags produces the same verdicts, the same cache
+keys and the same number of engine calls it did before they existed.
+
+```bash
+# claim-vs-evidence: the source for <item_id>.md is read from sources/<item_id>.md
+tj run --recipe typed_judge.recipes.draft_lint_v3 --engine typesafe --cache r.jsonl \
+       --sources sources/ drafts/*.md
+```
+
+A recipe opts in by declaring `CLAIM_QUESTIONS`; the second call goes into the same cache as separate
+rows and `verdict.apply` groups them back by `item_id`, so a draft still gets exactly one verdict. A
+draft with no matching source file is left alone — silence from the source is not a reason to
+downgrade.
+
+```bash
+# borderline items to review_required instead of a verdict (exit 1)
+tj run --recipe typed_judge.recipes.draft_lint_v3 --engine typesafe --cache r.jsonl --route drafts/*.md
+```
+
+A recipe opts in by declaring `margins(a, score)` — the distances to its own boundaries, each
+normalized by its own scale, because only the recipe knows them. For `draft_lint_v3` those are the
+style-defect count against its two gates (scale 0..8) and `overclaim` against 0.76 (scale 0..1).
+**On this recipe the flag is a measurement tool, not a CI gate yet:** on the 14 real drafts it routes
+**9 of 14** (0.643, `rep1.jsonl` of the 2026-09-20 run, recomputed from cache with no new calls),
+against 3/14 for the v2 axes in bead `qei`. Almost all of it is the `overclaim` axis — those
+probabilities sit in one clump at 0.59–0.87 and 8 of 14 fall inside ±0.05 of 0.76, so the band is
+measuring how dense the distribution is there, not how borderline a draft is. The defect-count axis
+fired once and is degenerate by construction: the count is an integer, so a ±0.4-defect band is an
+exact hit on 1 or 3 rather than a neighbourhood. Width and axes stay untouched until there are 30+
+labels (bead `6rx`).
+
 **Rule: weights and thresholds live in code, and fitting them on small n is forbidden.** With n=14 any weight tuned to the labels is fitted to noise (Dawes 1979 — unit weights generalize better than weights fitted on small samples). Thresholds are pre-registered in a note before the run that measures them, and are not adjusted afterwards to improve agreement; an unwanted number is a result, not a reason to re-tune. The 14 labels are a frozen holdout (see Calibration), so any agreement computed on them is a direction check, never proof.
 
 To calibrate on your own labels: write a `labels.json` with `{"labels": {"<item_id>": "<verdict>"}}` (or `{"<item_id>": {"verdict": "...", "category": "critical|major|minor"}}` for MQM-lite, see above) and run `tj calibrate --recipe typed_judge.recipes.draft_lint --cache <your-cache.jsonl> --labels labels.json`. Weights and thresholds live in `combine()` in code, not in the prompt — change the formula, not the model's instructions.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) — released versions, and the measurements that decided each feature.
 
 ## License
 
