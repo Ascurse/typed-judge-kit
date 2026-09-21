@@ -4,6 +4,17 @@ Numbers in this file are measured, not estimated; each one names the bead, scrip
 comes from. Where a measurement failed to support a feature, the failure is listed too — negative
 results are the point of this repo, not an embarrassment to hide in the tracker.
 
+## Unreleased
+
+### Fixed
+
+- **`tj run --route` no longer reports a healthy run as failed** (bead `en7`). `routing.route` used
+  to put its band explanation into `Verdict.error`, and the report counts errors as non-empty
+  `error`, so a run without a single engine failure printed `ошибок: 1`. `Verdict` now has a
+  separate `note` field for the routing reason; `error` stays for failures only, the table column is
+  `error / note`, and a real engine failure under `--route` still counts as one error. Exit code is
+  unchanged — `review_required` is still 1 (bead `so7`). `verdicts.jsonl` gains a `note` key.
+
 ## 0.2.0 — 2026-09-21
 
 Built and verified in a clean venv (bead `c5e`): `dist/typed_judge-0.2.0-py3-none-any.whl`,

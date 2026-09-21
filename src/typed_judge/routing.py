@@ -35,15 +35,15 @@ def route(v: Verdict, *, margins: dict[str, float], width: float = BAND_WIDTH,
           repeats: list[str] | None = None) -> Verdict:
     if v.score is None or v.verdict == HUMAN:
         return replace(v, verdict=REVIEW_REQUIRED,
-                       error=v.error or "нет score — маршрутизация без дефолта")
+                       note="нет score — маршрутизация без дефолта")
     if repeats and len(set(repeats)) > 1:
         return replace(v, verdict=REVIEW_REQUIRED,
-                       error=f"повторы разошлись: {', '.join(repeats)}")
+                       note=f"повторы разошлись: {', '.join(repeats)}")
     # 1e-9: расстояния округлены до 3 знаков, но 0.05 в float сравнивается с самим собой не всегда
     near = sorted(name for name, d in margins.items() if d <= width / 2 + 1e-9)
     if near:
         return replace(v, verdict=REVIEW_REQUIRED,
-                       error=f"в полосе +-{width / 2} по границам: {', '.join(near)}")
+                       note=f"в полосе +-{width / 2} по границам: {', '.join(near)}")
     return v
 
 

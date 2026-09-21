@@ -31,10 +31,10 @@ def _cost(rows: list[Row]) -> float | None:
 
 
 def markdown(rows: list[Row], verdicts: list[Verdict]) -> str:
-    lines = ["| item | verdict | score | error |", "|---|---|---|---|"]
+    lines = ["| item | verdict | score | error / note |", "|---|---|---|---|"]
     for v in verdicts:
         lines.append(f"| {v.item_id} | {_cell(v.verdict)} | {'' if v.score is None else v.score} | "
-                      f"{_cell(v.error) if v.error else ''} |")
+                      f"{_cell(v.error or v.note) if (v.error or v.note) else ''} |")
     errs = sum(1 for v in verdicts if v.error)
     lat = [r.latency_s for r in rows if r.latency_s]
     cost = _cost(rows)

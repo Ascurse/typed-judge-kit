@@ -20,7 +20,7 @@ def test_value_far_from_every_boundary_keeps_the_verdict():
 def test_value_inside_the_band_goes_to_review_and_names_the_axis():
     r = routing.route(Verdict("i", 0.74, "ready"), margins={"composite->0.72": 0.02})
     assert r.verdict == routing.REVIEW_REQUIRED
-    assert "composite->0.72" in r.error
+    assert "composite->0.72" in r.note and r.error is None
 
 
 def test_band_is_inclusive_at_its_edge_and_open_beyond_it():
@@ -34,7 +34,7 @@ def test_a_gate_on_another_scale_can_trigger_review_on_its_own():
     r = routing.route(Verdict("i", 0.88, "light_edit"),
                       margins={"composite->0.72": 0.16, "evidence->0.6": 0.01})
     assert r.verdict == routing.REVIEW_REQUIRED
-    assert "evidence" in r.error
+    assert "evidence" in r.note
 
 
 def test_missing_score_or_human_verdict_goes_to_review_not_to_a_default():
@@ -46,7 +46,7 @@ def test_repeat_disagreement_sends_to_review_even_outside_the_band():
     r = routing.route(Verdict("i", 0.95, "ready"), margins={"c": 0.9},
                       repeats=["ready", "light_edit", "ready"])
     assert r.verdict == routing.REVIEW_REQUIRED
-    assert "повтор" in r.error
+    assert "повтор" in r.note
 
 
 def test_agreeing_repeats_do_not_trigger_review():

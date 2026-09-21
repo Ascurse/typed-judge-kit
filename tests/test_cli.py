@@ -281,7 +281,7 @@ def run_route(tmp_path, monkeypatch, engine, *extra):
 
 def test_route_sends_a_draft_inside_the_band_to_review_required(tmp_path, monkeypatch):
     code, verdicts = run_route(tmp_path, monkeypatch, DefectStubEngine(defects=["hedging"]), "--route")
-    assert verdicts[0]["verdict"] == "review_required" and "defects->1" in verdicts[0]["error"]
+    assert verdicts[0]["verdict"] == "review_required" and "defects->1" in verdicts[0]["note"]
     assert code == 1
 
 

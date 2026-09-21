@@ -19,6 +19,8 @@ class Verdict:
     score: float | None
     verdict: str
     error: str | None = None
+    # error — только сбой (движок, неполные ответы); note — объяснение маршрутизации (бид en7)
+    note: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)

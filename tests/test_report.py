@@ -1,5 +1,6 @@
 from typed_judge.batch import Row
 from typed_judge.report import markdown
+from typed_judge.verdict import Verdict
 
 
 def _row(engine, tin, tout):
@@ -39,3 +40,16 @@ def test_cost_mixed_engines_sum():
 
 def test_cost_unknown_gemini_model_is_dash():
     assert "стоимость: -" in _summary([_row("gemini:gemini-9", 781, 226)])
+
+
+def test_routing_note_is_shown_but_not_counted_as_an_error():
+    """Бид en7: объяснение полосы — не сбой, «ошибок» считает только error."""
+    v = Verdict("a", 0.74, "review_required", note="в полосе +-0.05 по границам: defects->3")
+    out = markdown([], [v])
+    assert "defects->3" in out
+    assert "ошибок: 0" in out.splitlines()[-1]
+
+
+def test_engine_failure_is_still_counted_as_an_error():
+    out = markdown([], [Verdict("a", None, "human", error="HTTP 500")])
+    assert "HTTP 500" in out and "ошибок: 1" in out.splitlines()[-1]
