@@ -13,3 +13,6 @@ __pycache__/
 *.gate.lock*
 
 .claude/worktrees/
+
+.DS_Store
+.serena/
