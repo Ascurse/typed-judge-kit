@@ -130,6 +130,11 @@ QUESTIONS: dict[str, Question] = {
 }
 
 
+# Необязательный второй шаг рецепта (бид x5r): tj run --sources DIR задаёт источник к черновику,
+# CLI прогоняет эти вопросы вторым вызовом и приносит ответы в combine(a, claims).
+CLAIM_QUESTIONS: dict[str, Question] = claim_check.QUESTIONS
+
+
 # Агрегация v3 (бид typed-judge-kit-wnh, DR-63 ранги 3-4). Единичные веса вместо подогнанных
 # коэффициентов: на 14 метках подгонка весов — переобучение на шум (Dawes 1979). Пороги
 # зафиксированы в предрегистрации ДО прогона на метках (vault measurements/Агрегация v3
@@ -158,7 +163,7 @@ def unsourced_probability(a: dict[str, Answer]) -> float:
     return a["has_claim"].probability * (1 - a["has_source"].probability)
 
 
-def combine(a: dict[str, Answer]) -> tuple[float, str]:
+def combine(a: dict[str, Answer], claims: dict[str, Answer] | None = None) -> tuple[float, str]:
     """Единичные веса по стилистическим дефектам + понижение ready по критическому классу.
 
     Бинаризация 0.5 — тот же порог, что в contamination.binarize для Noul. Verbalized
@@ -185,6 +190,12 @@ def combine(a: dict[str, Answer]) -> tuple[float, str]:
     Значение считается через unsourced_probability() и отдаётся наружу как сигнал; вернуть его
     в вето можно после калибровки на наборе, где положительных примеров хотя бы несколько
     десятков (бид 0py про фикстуры — та же нехватка).
+    claims — ответы шага claim-vs-evidence (CLAIM_QUESTIONS, бид q36); их приносит verdict.apply,
+    когда у item есть строки второго шага. Вопросы рецепта про качество письма: на стресс-наборе h37
+    сам v3 пропускает 19 из 25 критических фикстур, где подменён факт, а не стиль. Шаг claim_check
+    против источника закрывает эти 19 и на чистых base не срабатывает (живой прогон 2026-09-20).
+    Источника к черновику нет (claims пустой) — вето не применяется: молчание источника не повод
+    понижать вердикт. score шаг не трогает — он понижает только ready (бид ov0).
     """
     defects = sum(a[qid].probability >= 0.5 for qid in STYLE_DEFECTS)
     score = 1 - defects / len(STYLE_DEFECTS)
@@ -196,20 +207,4 @@ def combine(a: dict[str, Answer]) -> tuple[float, str]:
         verdict = "ready"
     if verdict == "ready" and any(a[qid].probability >= OVERCLAIM_THRESHOLD for qid in CRITICAL_DEFECTS):
         verdict = "light_edit"
-    return round(score, 3), verdict
-
-
-def combine_with_claims(a: dict[str, Answer],
-                        claim_answers: dict[str, Answer]) -> tuple[float, str]:
-    """combine() + шаг claim-vs-evidence (бид q36) как часть рецепта, а не сборка в вызывающем коде.
-
-    Вопросы рецепта про качество письма: на стресс-наборе h37 сам v3 пропускает 19 из 25 критических
-    фикстур, где подменён факт, а не стиль. Шаг claim_check против источника закрывает эти 19 и на
-    чистых base не срабатывает (живой прогон 2026-09-20). Источник берётся вызывающим кодом — рецепт
-    не знает, откуда он (Source material пакета черновика, приложенные заметки).
-
-    claim_answers пустой (источника к черновику нет) — вето не применяется: молчание источника не
-    повод понижать вердикт. score шаг не трогает — он понижает только вердикт ready (бид ov0).
-    """
-    score, verdict = combine(a)
-    return score, claim_check.veto(verdict, claim_check.fired(claim_answers))
+    return round(score, 3), claim_check.veto(verdict, claim_check.fired(claims or {}))

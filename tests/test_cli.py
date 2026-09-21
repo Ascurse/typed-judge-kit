@@ -152,3 +152,97 @@ def test_engine_failure_exits_1(tmp_path, monkeypatch):
     code = main(["run", "--recipe", "typed_judge.recipes.draft_lint", "--engine", "fake",
                  "--cache", str(tmp_path / "r.jsonl"), path])
     assert code == 1
+
+
+# --- шаг claim-vs-evidence из CLI: tj run --sources DIR (бид typed-judge-kit-x5r) ---
+
+V3 = "typed_judge.recipes.draft_lint_v3"
+
+
+class ClaimStubEngine:
+    """Чистый черновик по вопросам рецепта; целостный claim-вопрос срабатывает, если источник спорит."""
+
+    name = "fake"
+
+    def __init__(self):
+        self.calls = 0
+
+    def ask(self, state, questions):
+        from typed_judge.engines import Result
+        from typed_judge.questions import Answer, Choice, Noul
+        self.calls += 1
+        out = {}
+        for qid, q in questions.items():
+            if isinstance(q, Choice):
+                out[qid] = Answer(value=list(q.options)[0], confidence=0.9)
+            elif isinstance(q, Noul):
+                fires = qid == "any_unsupported" and "ошибся 30 раз" in state
+                out[qid] = Answer(probability=0.9 if fires else 0.1)
+        return Result(answers=out)
+
+
+def write_pair(tmp_path, draft_text, source_text=None):
+    (tmp_path / "src").mkdir(exist_ok=True)
+    p = tmp_path / "d.md"
+    p.write_text(draft_text, encoding="utf-8")
+    if source_text is not None:
+        (tmp_path / "src" / "d.md").write_text(source_text, encoding="utf-8")
+    return str(p)
+
+
+def run_v3(tmp_path, monkeypatch, path, *extra):
+    engine = ClaimStubEngine()
+    monkeypatch.setattr("typed_judge.cli.make_engine", lambda name: engine)
+    cache = tmp_path / "r.jsonl"
+    code = main(["run", "--recipe", V3, "--engine", "fake", "--cache", str(cache),
+                 "--out", str(tmp_path / "v.jsonl"), *extra, path])
+    verdicts = [json.loads(l) for l in (tmp_path / "v.jsonl").read_text().splitlines()]
+    return code, verdicts, engine, cache
+
+
+def test_sources_lowers_ready_when_the_source_contradicts_the_draft(tmp_path, monkeypatch):
+    path = write_pair(tmp_path, "В отчёте: ошибся 3 раза.", "ошибся 30 раз")
+    _, verdicts, _, _ = run_v3(tmp_path, monkeypatch, path, "--sources", str(tmp_path / "src"))
+    assert [v["verdict"] for v in verdicts] == ["light_edit"]
+
+
+def test_sources_keeps_ready_when_the_source_agrees(tmp_path, monkeypatch):
+    path = write_pair(tmp_path, "В отчёте: ошибся 3 раза.", "ошибся 3 раза")
+    _, verdicts, _, _ = run_v3(tmp_path, monkeypatch, path, "--sources", str(tmp_path / "src"))
+    assert [v["verdict"] for v in verdicts] == ["ready"]
+
+
+def test_two_steps_give_one_verdict_per_item_and_two_cache_rows(tmp_path, monkeypatch):
+    path = write_pair(tmp_path, "В отчёте: ошибся 3 раза.", "ошибся 30 раз")
+    _, verdicts, engine, cache = run_v3(tmp_path, monkeypatch, path, "--sources", str(tmp_path / "src"))
+    assert len(verdicts) == 1 and verdicts[0]["item_id"] == "d"
+    assert len(cache.read_text().splitlines()) == 2 and engine.calls == 2
+
+
+def test_run_without_sources_does_not_call_the_engine_twice(tmp_path, monkeypatch):
+    path = write_pair(tmp_path, "В отчёте: ошибся 3 раза.", "ошибся 30 раз")
+    _, verdicts, engine, cache = run_v3(tmp_path, monkeypatch, path)
+    assert engine.calls == 1 and [v["verdict"] for v in verdicts] == ["ready"]
+    assert len(cache.read_text().splitlines()) == 1
+
+
+def test_missing_source_file_leaves_the_verdict_alone(tmp_path, monkeypatch):
+    path = write_pair(tmp_path, "В отчёте: ошибся 30 раз.")  # источника для d.md нет
+    _, verdicts, engine, _ = run_v3(tmp_path, monkeypatch, path, "--sources", str(tmp_path / "src"))
+    assert engine.calls == 1 and [v["verdict"] for v in verdicts] == ["ready"]
+
+
+def test_sources_on_a_recipe_without_claim_questions_changes_nothing(tmp_path, monkeypatch):
+    path = write_pair(tmp_path, "В отчёте: ошибся 30 раз.", "ошибся 30 раз")
+    engine = ClaimStubEngine()
+    monkeypatch.setattr("typed_judge.cli.make_engine", lambda name: engine)
+    code = main(["run", "--recipe", "typed_judge.recipes.draft_lint_v2", "--engine", "fake",
+                 "--cache", str(tmp_path / "r.jsonl"), "--sources", str(tmp_path / "src"), path])
+    assert code in (0, 1) and engine.calls == 1
+
+
+def test_cli_has_no_getattr_for_combine_with_claims():
+    import pathlib
+    import typed_judge.cli as cli_mod
+    src = pathlib.Path(cli_mod.__file__).read_text(encoding="utf-8")
+    assert "combine_with_claims" not in src

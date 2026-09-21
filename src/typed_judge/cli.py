@@ -8,7 +8,7 @@ import json
 import pathlib
 import sys
 
-from . import batch, blind_duplicates, calibrate, diffing, mqm, report
+from . import batch, blind_duplicates, calibrate, claim_check, diffing, mqm, report
 from .engines.fake import FakeEngine
 from .verdict import HUMAN, Verdict, apply
 
@@ -58,11 +58,31 @@ def _exit_code(verdicts: list[Verdict]) -> int:
     return 1 if any(v.verdict == HUMAN or v.error for v in verdicts) else 0
 
 
+def claim_states(recipe, items: dict[str, str], sources_dir: str | None) -> dict[str, str]:
+    """Источник к черновику — <sources_dir>/<item_id>.md. Нет каталога, нет файла или нет
+    CLAIM_QUESTIONS у рецепта — шага не будет: молчание источника вердикт не понижает."""
+    if not (sources_dir and getattr(recipe, "CLAIM_QUESTIONS", None)):
+        return {}
+    root = pathlib.Path(sources_dir)
+    states = {}
+    for item_id, draft in items.items():
+        path = root / f"{item_id}.md"
+        if path.exists():
+            (source,) = load_items([str(path)]).values()
+            states[item_id] = claim_check.state_for(draft=draft, source=source)
+    return states
+
+
 def cmd_run(a) -> int:
     recipe, engine = load_recipe(a.recipe), make_engine(a.engine)
     cache = pathlib.Path(a.cache)
-    rows = batch.run(engine, load_items(a.files), recipe.QUESTIONS, cache)
-    verdicts = apply(rows, recipe.combine)
+    items = load_items(a.files)
+    rows = batch.run(engine, items, recipe.QUESTIONS, cache)
+    # Второй шаг идёт в тот же кэш отдельными строками (ключ включает набор вопросов);
+    # apply группирует по item_id, так что на черновик остаётся один вердикт.
+    states = claim_states(recipe, items, a.sources)
+    claim_rows = batch.run(engine, states, recipe.CLAIM_QUESTIONS, cache) if states else []
+    verdicts = apply(rows + claim_rows, recipe.combine)
     _write_verdicts(pathlib.Path(a.out) if a.out else cache.parent / "verdicts.jsonl", verdicts)
     print(report.markdown(rows, verdicts))
     return _exit_code(verdicts)
@@ -121,7 +141,9 @@ def main(argv: list[str] | None = None) -> int:
 
     r = sub.add_parser("run", help="прогнать items через движок с кэшем и посчитать вердикты")
     r.add_argument("--recipe", required=True); r.add_argument("--engine", default="fake")
-    r.add_argument("--cache", required=True); r.add_argument("--out"); r.add_argument("files", nargs="+")
+    r.add_argument("--cache", required=True); r.add_argument("--out")
+    r.add_argument("--sources", help="каталог с источниками: <DIR>/<item_id>.md — включает шаг claim-vs-evidence")
+    r.add_argument("files", nargs="+")
     r.set_defaults(fn=cmd_run)
 
     c = sub.add_parser("calibrate", help="сверить вердикты по кэшу с метками и подобрать пороги")

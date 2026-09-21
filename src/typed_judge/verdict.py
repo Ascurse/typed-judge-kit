@@ -8,7 +8,9 @@ from .batch import Row
 from .questions import Answer
 
 HUMAN = "human"
-Combine = Callable[[dict[str, Answer]], tuple[float, str]]
+# Рецепт объявляет combine(a) или combine(a, claims) — второй аргумент приходит, только если у item
+# есть строки второго шага (claim-vs-evidence). Старая сигнатура так остаётся рабочей.
+Combine = Callable[..., tuple[float, str]]
 
 
 @dataclass
@@ -22,19 +24,31 @@ class Verdict:
         return asdict(self)
 
 
-def apply(rows: list[Row], combine: Combine) -> list[Verdict]:
-    out = []
+def _by_item(rows: list[Row]) -> dict[str, list[Row]]:
+    groups: dict[str, list[Row]] = {}
     for r in rows:
-        if r.error:
-            out.append(Verdict(r.item_id, None, HUMAN, r.error))
+        groups.setdefault(r.item_id, []).append(r)
+    return groups
+
+
+def apply(rows: list[Row], combine: Combine) -> list[Verdict]:
+    """Один вердикт на item_id. Несколько строк на item — шаги одного рецепта (бид x5r): первая
+    несёт ответы рецепта, остальные складываются во второй аргумент combine."""
+    out = []
+    for item_id, group in _by_item(rows).items():
+        err = next((r.error for r in group if r.error), None)
+        if err:
+            out.append(Verdict(item_id, None, HUMAN, err))
             continue
-        bad = [q for q, a in r.answers.items() if a.error]
+        bad = [q for r in group for q, a in r.answers.items() if a.error]
         if bad:
-            out.append(Verdict(r.item_id, None, HUMAN, f"ответы с ошибкой: {', '.join(bad)}"))
+            out.append(Verdict(item_id, None, HUMAN, f"ответы с ошибкой: {', '.join(bad)}"))
             continue
+        primary, *extra = group
+        claims = {q: a for r in extra for q, a in r.answers.items()}
         try:
-            score, verdict = combine(r.answers)
-            out.append(Verdict(r.item_id, score, verdict))
+            score, verdict = combine(primary.answers, claims) if extra else combine(primary.answers)
+            out.append(Verdict(item_id, score, verdict))
         except Exception as e:  # noqa: BLE001 — формула упала на неполных ответах
-            out.append(Verdict(r.item_id, None, HUMAN, f"{type(e).__name__}: {e}"))
+            out.append(Verdict(item_id, None, HUMAN, f"{type(e).__name__}: {e}"))
     return out

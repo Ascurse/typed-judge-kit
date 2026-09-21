@@ -105,8 +105,8 @@ def test_v3_with_claim_check_closes_the_auto_off_gate_of_h37():
     v3_rows = {r.item_id: r for r in read_rows(_FIX / "v3_cache.jsonl")}
     verdicts = []
     for item_id, row in sorted(v3_rows.items()):
-        # Через combine_with_claims, а не сборкой здесь: тест падает, если шаг отключить от рецепта.
-        score, verdict = draft_lint_v3.combine_with_claims(row.answers, _claim_answers(item_id))
+        # Через combine рецепта, а не сборкой здесь: тест падает, если шаг отключить от рецепта.
+        score, verdict = draft_lint_v3.combine(row.answers, _claim_answers(item_id))
         verdicts.append(Verdict(item_id, score, verdict))
     status = auto_status(verdicts, _CRITICAL)
     assert status.status == AUTO, f"auto off: пропущены {status.missed}"
@@ -148,16 +148,16 @@ def test_production_question_set_is_the_holistic_question_alone():
     assert set(claim_check.QUESTIONS) == {claim_check.HOLISTIC_QID}
 
 
-def test_combine_with_claims_lowers_ready_when_the_holistic_question_fired():
-    score, verdict = draft_lint_v3.combine_with_claims(_clean_v3_answers(), _holistic(0.9))
+def test_combine_with_claim_answers_lowers_ready_when_the_holistic_question_fired():
+    score, verdict = draft_lint_v3.combine(_clean_v3_answers(), _holistic(0.9))
     assert verdict == "light_edit"
     assert score == draft_lint_v3.combine(_clean_v3_answers())[0]
 
 
-def test_combine_with_claims_keeps_ready_when_nothing_fired():
-    assert draft_lint_v3.combine_with_claims(_clean_v3_answers(), _holistic(0.1))[1] == "ready"
+def test_combine_with_claim_answers_keeps_ready_when_nothing_fired():
+    assert draft_lint_v3.combine(_clean_v3_answers(), _holistic(0.1))[1] == "ready"
 
 
-def test_combine_with_claims_without_claim_answers_is_plain_combine():
+def test_combine_with_empty_claim_answers_is_plain_combine():
     a = _clean_v3_answers()
-    assert draft_lint_v3.combine_with_claims(a, {}) == draft_lint_v3.combine(a)
+    assert draft_lint_v3.combine(a, {}) == draft_lint_v3.combine(a)

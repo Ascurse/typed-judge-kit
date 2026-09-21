@@ -31,3 +31,31 @@ def test_none_value_in_present_answer_goes_to_human():
     row = Row("n", "k", "fake", {"hook": Answer(value=None)})
     v = apply([row], lambda a: (a["hook"].value / 3, "ready"))
     assert v[0].verdict == HUMAN and "TypeError" in v[0].error
+
+
+def test_second_row_for_same_item_gives_one_verdict_and_reaches_combine():
+    """Два шага (рецепт + claim) в одном прогоне — один вердикт на item_id, ответы второго шага в combine."""
+    seen = {}
+
+    def combine2(a, claims=None):
+        seen.update(claims or {})
+        return 1.0, "lowered" if claims else "ready"
+
+    rows = [Row("a", "k1", "fake", {"ev": Answer(probability=0.9)}),
+            Row("a", "k2", "fake", {"any_unsupported": Answer(probability=0.9)})]
+    v = apply(rows, combine2)
+    assert [(x.item_id, x.verdict) for x in v] == [("a", "lowered")]
+    assert set(seen) == {"any_unsupported"}
+
+
+def test_single_row_still_calls_combine_with_one_argument():
+    """Рецепт со старой сигнатурой combine(a) не должен получить второй аргумент."""
+    rows = [Row("a", "k1", "fake", {"ev": Answer(probability=0.9)})]
+    assert apply(rows, lambda a: (1.0, "ready"))[0].verdict == "ready"
+
+
+def test_error_in_second_row_of_a_group_goes_to_human():
+    rows = [Row("a", "k1", "fake", {"ev": Answer(probability=0.9)}),
+            Row("a", "k2", "fake", {}, error="HTTP 500")]
+    v = apply(rows, lambda a, claims=None: (1.0, "ready"))
+    assert len(v) == 1 and v[0].verdict == HUMAN and v[0].error == "HTTP 500"
