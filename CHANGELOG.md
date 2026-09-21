@@ -6,34 +6,21 @@ results are the point of this repo, not an embarrassment to hide in the tracker.
 
 ## 0.2.1 — 2026-09-21
 
-### Fixed
-
-- **`tj run --route` no longer reports a healthy run as failed** (bead `en7`). `routing.route` used
-  to put its band explanation into `Verdict.error`, and the report counts errors as non-empty
-  `error`, so a run without a single engine failure printed `ошибок: 1`. `Verdict` now has a
-  separate `note` field for the routing reason; `error` stays for failures only, the table column is
-  `error / note`, and a real engine failure under `--route` still counts as one error. Exit code is
-  unchanged — `review_required` is still 1 (bead `so7`). `verdicts.jsonl` gains a `note` key.
-
-## 0.2.0 — 2026-09-21
-
-Built and verified in a clean venv (bead `c5e`): `dist/typed_judge-0.2.0-py3-none-any.whl`,
-`tj --help` exits 0, and the README demo prints its documented table byte-for-byte.
+This release carries everything an earlier draft of this file listed under 0.2.0. The version in
+`pyproject.toml` stayed at `0.2.0` for five commits after the `v0.2.0` tag had already been pushed
+and published, so the work below was written up against a number that was taken. What PyPI serves as
+0.2.0 is the tag, not the section — see 0.2.0 below (bead `80n`). Wheel and sdist verified in a
+clean venv outside the repository (bead `jnk`): `tj --help` exits 0, the README demo prints its
+documented table byte-for-byte, and the sdist installs with `--no-binary :all:` and runs its own
+suite.
 
 ### Recipes
 
-- **`draft_lint_v2`** — `overclaim >= 0.76` downgrades `ready` to `light_edit`. The threshold was
-  pre-registered before the run that measured it and has not been moved since (bead `k55`:
-  separation 1.000 on 5 minimal `base`/`overclaim` pairs, firing p 0.91–0.97 against max 0.56 on the
-  unappended texts; the 0.56–0.91 gap is empty).
 - **`draft_lint_v3`** — binary defect questions with an explicit "example of a violation" instead of
   Score/positive-Noul, unit weights over 8 style defects, `overclaim` isolated as a critical class
   (beads `zin`, `wnh`, `ov0`, `08p`, `p6g`). On the owner's 14 labels it agrees 6/14 against v2's
   11/14 (permutation p = 0.883 — chance level); it is the default recipe anyway, because the label
   set is a frozen holdout of 14 and the stress gate is what the recipe is actually for.
-- **`screen_incoming`** — guardrail for incoming text before an agent stores or acts on it: 4
-  questions mapped to `block` / `skip` / `pass` / `review`. On 6 real items (typesafe `jev-latest`,
-  $0.0002) it blocked both injection samples and skipped the promo.
 - **`claim_check`** (beads `q36`, `sqd`, `6qa`) — the fact-checking step the writing recipes cannot
   be: draft and source in one state. On the h37 critical fixtures the holistic question catches
   **25/25** with 0/5 false fires on the bases, which is what turns `pytest -m stress` green
@@ -72,6 +59,18 @@ Built and verified in a clean venv (bead `c5e`): `dist/typed_judge-0.2.0-py3-non
   source distribution: 945 KB, of which 803 KB was tracker state. An anchored
   `[tool.hatch.build.targets.sdist] include` list brings it to 117 KB (bead `c5e`). The wheel was
   never affected — 32 files, sources only.
+- **One source of truth for the version** (bead `jnk`). `__init__` declared `__version__ = "0.1.0"`
+  against `pyproject`'s `0.2.0` — the duplicate had drifted unnoticed. `__version__` now reads the
+  installed package metadata, and a test asserts the two agree.
+
+### Fixed
+
+- **`tj run --route` no longer reports a healthy run as failed** (bead `en7`). `routing.route` used
+  to put its band explanation into `Verdict.error`, and the report counts errors as non-empty
+  `error`, so a run without a single engine failure printed `ошибок: 1`. `Verdict` now has a
+  separate `note` field for the routing reason; `error` stays for failures only, the table column is
+  `error / note`, and a real engine failure under `--route` still counts as one error. Exit code is
+  unchanged — `review_required` is still 1 (bead `so7`). `verdicts.jsonl` gains a `note` key.
 
 ### Calibration
 
@@ -113,6 +112,23 @@ Built and verified in a clean venv (bead `c5e`): `dist/typed_judge-0.2.0-py3-non
   is open (bead `490`).
 - **A typed judgment is a gate, not a ranker** — a Noul reranker over fusion-retrieval's top-20 made
   results worse: R@5 14/15 → 13/15 (v1) and 12/15 (v2), MRR 0.744 → 0.63.
+
+## 0.2.0 — 2026-09-20
+
+Tag `v0.2.0` (`6c00ab3`), published to PyPI by `release.yml` on the tag push. Against 0.1.1 it adds
+exactly two recipes and nothing else: `tj run` here takes only `--recipe/--engine/--cache/--out`, and
+the wheel carries `draft_lint`, `draft_lint_v2` and `screen_incoming`. Everything else once listed
+under this heading landed after the tag and is served as 0.2.1.
+
+### Recipes
+
+- **`draft_lint_v2`** — `overclaim >= 0.76` downgrades `ready` to `light_edit`. The threshold was
+  pre-registered before the run that measured it and has not been moved since (bead `k55`:
+  separation 1.000 on 5 minimal `base`/`overclaim` pairs, firing p 0.91–0.97 against max 0.56 on the
+  unappended texts; the 0.56–0.91 gap is empty).
+- **`screen_incoming`** — guardrail for incoming text before an agent stores or acts on it: 4
+  questions mapped to `block` / `skip` / `pass` / `review`. On 6 real items (typesafe `jev-latest`,
+  $0.0002) it blocked both injection samples and skipped the promo.
 
 ## 0.1.1 — 2026-09-20
 
