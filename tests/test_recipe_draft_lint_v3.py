@@ -1,3 +1,4 @@
+from typed_judge import routing
 from typed_judge.questions import Answer, Choice, Noul
 from typed_judge.recipes import draft_lint as dl
 from typed_judge.recipes import draft_lint_v2 as v2
@@ -138,3 +139,22 @@ def test_sourceless_claim_alone_does_not_change_the_verdict():
 def test_overclaim_alone_downgrades_but_never_to_heavy_edit():
     # бид ov0: на 14 метках вето давало 9 heavy_edit при нуле heavy_edit среди меток
     assert v3.combine(_answers(overclaim=0.9))[1] == "light_edit"
+
+
+# --- margins(): расстояния до границ вердикта для routing (бид typed-judge-kit-so7) ---
+
+def test_margins_measure_defect_count_against_both_gates_on_its_own_scale():
+    a = _answers(hook_weak=0.9)  # ровно 1 дефект — это и есть граница light_edit
+    m = v3.margins(a, v3.combine(a)[0])
+    assert m["defects->1"] == 0.0
+    assert m["defects->3"] == round(2 / len(v3.STYLE_DEFECTS), 3)
+
+
+def test_margins_measure_overclaim_against_its_threshold_on_the_probability_scale():
+    a = _answers(overclaim=0.74)
+    assert v3.margins(a, v3.combine(a)[0])["overclaim->0.76"] == 0.02
+
+
+def test_margins_of_a_clean_draft_are_outside_the_band():
+    a = _answers()
+    assert min(v3.margins(a, v3.combine(a)[0]).values()) > routing.BAND_WIDTH / 2

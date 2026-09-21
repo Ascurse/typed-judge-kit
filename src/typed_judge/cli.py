@@ -8,7 +8,7 @@ import json
 import pathlib
 import sys
 
-from . import batch, blind_duplicates, calibrate, claim_check, diffing, mqm, report
+from . import batch, blind_duplicates, calibrate, claim_check, diffing, mqm, report, routing
 from .engines.fake import FakeEngine
 from .verdict import HUMAN, Verdict, apply
 
@@ -55,7 +55,8 @@ def _write_verdicts(path: pathlib.Path, verdicts: list[Verdict]) -> None:
 
 
 def _exit_code(verdicts: list[Verdict]) -> int:
-    return 1 if any(v.verdict == HUMAN or v.error for v in verdicts) else 0
+    # review_required — тоже не «прошло»: пограничное, ушедшее человеку, не должно молча проехать в CI.
+    return 1 if any(v.verdict in (HUMAN, routing.REVIEW_REQUIRED) or v.error for v in verdicts) else 0
 
 
 def claim_states(recipe, items: dict[str, str], sources_dir: str | None) -> dict[str, str]:
@@ -73,6 +74,18 @@ def claim_states(recipe, items: dict[str, str], sources_dir: str | None) -> dict
     return states
 
 
+def route_verdicts(recipe, rows: list[batch.Row], verdicts: list[Verdict]) -> list[Verdict]:
+    """Пограничное — человеку (routing, бид qei). Рецепт без margins() маршрутизировать нечем:
+    расстояния до границ знает он, а не CLI, поэтому вердикты возвращаются как есть."""
+    if not hasattr(recipe, "margins"):
+        return verdicts
+    answers = {r.item_id: r.answers for r in rows}
+    # score is None — вердикт уже human; margins по неполным ответам считать нечем, route() и так
+    # отправит такой item на review.
+    return [routing.route(v, margins=recipe.margins(answers[v.item_id], v.score)
+                          if v.score is not None else {}) for v in verdicts]
+
+
 def cmd_run(a) -> int:
     recipe, engine = load_recipe(a.recipe), make_engine(a.engine)
     cache = pathlib.Path(a.cache)
@@ -83,6 +96,8 @@ def cmd_run(a) -> int:
     states = claim_states(recipe, items, a.sources)
     claim_rows = batch.run(engine, states, recipe.CLAIM_QUESTIONS, cache) if states else []
     verdicts = apply(rows + claim_rows, recipe.combine)
+    if a.route:
+        verdicts = route_verdicts(recipe, rows, verdicts)
     _write_verdicts(pathlib.Path(a.out) if a.out else cache.parent / "verdicts.jsonl", verdicts)
     print(report.markdown(rows, verdicts))
     return _exit_code(verdicts)
@@ -143,6 +158,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--recipe", required=True); r.add_argument("--engine", default="fake")
     r.add_argument("--cache", required=True); r.add_argument("--out")
     r.add_argument("--sources", help="каталог с источниками: <DIR>/<item_id>.md — включает шаг claim-vs-evidence")
+    r.add_argument("--route", action="store_true",
+                   help="пограничное (полоса вокруг границ рецепта) уводить в review_required, exit 1")
     r.add_argument("files", nargs="+")
     r.set_defaults(fn=cmd_run)
 

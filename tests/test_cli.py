@@ -246,3 +246,61 @@ def test_cli_has_no_getattr_for_combine_with_claims():
     import typed_judge.cli as cli_mod
     src = pathlib.Path(cli_mod.__file__).read_text(encoding="utf-8")
     assert "combine_with_claims" not in src
+
+
+# --- tj run --route: зона сомнения из CLI (бид typed-judge-kit-so7) ---
+
+class DefectStubEngine(ClaimStubEngine):
+    """Черновик с ровно одним стилистическим дефектом — ровно на границе ready/light_edit."""
+
+    def __init__(self, defects=(), overclaim=0.1):
+        super().__init__()
+        self.defects, self.overclaim = set(defects), overclaim
+
+    def ask(self, state, questions):
+        from typed_judge.engines import Result
+        from typed_judge.questions import Answer, Choice, Noul
+        self.calls += 1
+        out = {}
+        for qid, q in questions.items():
+            if isinstance(q, Choice):
+                out[qid] = Answer(value=list(q.options)[0], confidence=0.9)
+            elif isinstance(q, Noul):
+                p = self.overclaim if qid == "overclaim" else (0.9 if qid in self.defects else 0.1)
+                out[qid] = Answer(probability=p)
+        return Result(answers=out)
+
+
+def run_route(tmp_path, monkeypatch, engine, *extra):
+    monkeypatch.setattr("typed_judge.cli.make_engine", lambda name: engine)
+    path = write_pair(tmp_path, "В отчёте: ошибся 3 раза.")
+    code = main(["run", "--recipe", V3, "--engine", "fake", "--cache", str(tmp_path / "r.jsonl"),
+                 "--out", str(tmp_path / "v.jsonl"), *extra, path])
+    return code, [json.loads(l) for l in (tmp_path / "v.jsonl").read_text().splitlines()]
+
+
+def test_route_sends_a_draft_inside_the_band_to_review_required(tmp_path, monkeypatch):
+    code, verdicts = run_route(tmp_path, monkeypatch, DefectStubEngine(defects=["hedging"]), "--route")
+    assert verdicts[0]["verdict"] == "review_required" and "defects->1" in verdicts[0]["error"]
+    assert code == 1
+
+
+def test_route_leaves_a_draft_outside_the_band_with_its_own_verdict(tmp_path, monkeypatch):
+    code, verdicts = run_route(tmp_path, monkeypatch, DefectStubEngine(), "--route")
+    assert verdicts[0]["verdict"] == "ready" and code == 0
+
+
+def test_without_route_a_borderline_draft_keeps_its_verdict_and_exit_code(tmp_path, monkeypatch):
+    code, verdicts = run_route(tmp_path, monkeypatch, DefectStubEngine(defects=["hedging"]))
+    assert verdicts[0]["verdict"] == "light_edit" and code == 0
+
+
+def test_route_on_a_recipe_without_margins_changes_nothing(tmp_path, monkeypatch):
+    engine = DefectStubEngine(defects=["hedging"])
+    monkeypatch.setattr("typed_judge.cli.make_engine", lambda name: engine)
+    path = write_pair(tmp_path, "В отчёте: ошибся 3 раза.")
+    code = main(["run", "--recipe", "typed_judge.recipes.draft_lint", "--engine", "fake",
+                 "--cache", str(tmp_path / "r.jsonl"), "--out", str(tmp_path / "v.jsonl"),
+                 "--route", path])
+    verdicts = [json.loads(l) for l in (tmp_path / "v.jsonl").read_text().splitlines()]
+    assert code in (0, 1) and verdicts[0]["verdict"] != "review_required"

@@ -32,7 +32,7 @@ CoT-first (rank 2) — см. COT_FIRST_LIMITATION ниже: TypeSafe/Jev не в
 """
 from __future__ import annotations
 
-from .. import claim_check
+from .. import claim_check, routing
 from ..questions import Answer, Choice, Noul, Question
 from .draft_lint import DEFECTS, READINESS
 from .draft_lint_v2 import OVERCLAIM_THRESHOLD
@@ -163,6 +163,10 @@ def unsourced_probability(a: dict[str, Answer]) -> float:
     return a["has_claim"].probability * (1 - a["has_source"].probability)
 
 
+def _defects(a: dict[str, Answer]) -> int:
+    return sum(a[qid].probability >= 0.5 for qid in STYLE_DEFECTS)
+
+
 def combine(a: dict[str, Answer], claims: dict[str, Answer] | None = None) -> tuple[float, str]:
     """Единичные веса по стилистическим дефектам + понижение ready по критическому классу.
 
@@ -197,7 +201,7 @@ def combine(a: dict[str, Answer], claims: dict[str, Answer] | None = None) -> tu
     Источника к черновику нет (claims пустой) — вето не применяется: молчание источника не повод
     понижать вердикт. score шаг не трогает — он понижает только ready (бид ov0).
     """
-    defects = sum(a[qid].probability >= 0.5 for qid in STYLE_DEFECTS)
+    defects = _defects(a)
     score = 1 - defects / len(STYLE_DEFECTS)
     if defects >= HEAVY_EDIT_AT:
         verdict = "heavy_edit"
@@ -208,3 +212,34 @@ def combine(a: dict[str, Answer], claims: dict[str, Answer] | None = None) -> tu
     if verdict == "ready" and any(a[qid].probability >= OVERCLAIM_THRESHOLD for qid in CRITICAL_DEFECTS):
         verdict = "light_edit"
     return round(score, 3), claim_check.veto(verdict, claim_check.fired(claims or {}))
+
+
+def margins(a: dict[str, Answer], score: float) -> dict[str, float]:
+    """Нормированные расстояния до границ combine() — для routing.route (бид so7).
+
+    Оси ровно те, от которых зависит вердикт: число стилистических дефектов против LIGHT_EDIT_AT
+    и HEAVY_EDIT_AT (шкала 0..len(STYLE_DEFECTS)) и вероятность overclaim против
+    OVERCLAIM_THRESHOLD (шкала 0..1). Итоговый score — функция того же счётчика дефектов, своей
+    оси не добавляет.
+
+    Счётчик дискретен, поэтому по нему полоса ±0.05 доли шкалы (±0.4 дефекта при 8 осях)
+    вырождается в точное попадание: в review уходит ровно черновик с 1 или 3 дефектами, а не
+    «почти дотянувший». Мера борется не с тем шумом, из-за которого счётчик и дрожит — им дрожат
+    вероятности вокруг бинаризации 0.5, а не сам счётчик. Ось по расстоянию вероятностей до 0.5
+    здесь не заведена: она не предрегистрирована, а --route выключен по умолчанию (бид so7).
+
+    ЗАМЕР на 14 реальных черновиках (rep1.jsonl прогона 2026-09-20, без новых вызовов): --route
+    отправляет в review_required 9 из 14 (0.643), а не 3 из 14, как полоса по осям v2 в биде qei.
+    Виновата не декомпозиция дефектов (defects->1 сработал 1 раз), а ось overclaim: вероятности
+    на этом наборе лежат кучей 0.59..0.87, и 8 из 14 попадают в 0.71..0.81 вокруг порога 0.76.
+    То есть полоса ±0.05 по overclaim меряет не пограничность, а плотность распределения. Пока
+    ширина не откалибрована на 30+ метках (бид 6rx), --route на этом рецепте — инструмент для
+    замеров, а не для CI.
+    """
+    m = {
+        "defects->1": routing.margin(_defects(a), LIGHT_EDIT_AT, scale=len(STYLE_DEFECTS)),
+        "defects->3": routing.margin(_defects(a), HEAVY_EDIT_AT, scale=len(STYLE_DEFECTS)),
+    }
+    for qid in CRITICAL_DEFECTS:
+        m[f"{qid}->{OVERCLAIM_THRESHOLD}"] = routing.margin(a[qid].probability, OVERCLAIM_THRESHOLD)
+    return m
