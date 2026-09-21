@@ -52,9 +52,9 @@ def test_unsupported_skips_errored_or_missing_answers():
 
 
 def test_veto_lowers_ready_but_leaves_other_verdicts_alone():
-    assert claim_check.veto("ready", unsupported=[0]) == "light_edit"
-    assert claim_check.veto("ready", unsupported=[]) == "ready"
-    assert claim_check.veto("heavy_edit", unsupported=[0]) == "heavy_edit"
+    assert claim_check.veto("ready", True) == "light_edit"
+    assert claim_check.veto("ready", False) == "ready"
+    assert claim_check.veto("heavy_edit", True) == "heavy_edit"
 
 
 # --- гейт на закэшированном живом прогоне (uv run python scripts/claim_check_run.py) ---
@@ -76,16 +76,15 @@ _CRITICAL = {it["id"] for it in _DATA["items"] if it["kind"] == "critical"}
 _BASE = {it["id"] for it in _DATA["items"] if it["kind"] == "base"}
 
 
-def _holistic_fired(item_id: str) -> bool:
-    a = _ROWS[item_id].answers[claim_check.HOLISTIC_QID]
-    return not a.error and a.probability is not None and a.probability >= 0.5
+def _claim_answers(item_id: str) -> dict[str, Answer]:
+    return _ROWS[item_id].answers if item_id in _ROWS else {}
 
 
 def _verdicts_after_claim_check() -> list[Verdict]:
     """Судья-по-стилю отдал бы ready всем: на критических фикстурах меняется факт, а не стиль."""
     out = []
     for item_id in sorted(_CRITICAL | _BASE):
-        v = claim_check.veto("ready", unsupported=[0] if _holistic_fired(item_id) else [])
+        v = claim_check.veto("ready", claim_check.fired(_claim_answers(item_id)))
         out.append(Verdict(item_id, 0.9, v))
     return out
 
@@ -106,12 +105,16 @@ def test_v3_with_claim_check_closes_the_auto_off_gate_of_h37():
     v3_rows = {r.item_id: r for r in read_rows(_FIX / "v3_cache.jsonl")}
     verdicts = []
     for item_id, row in sorted(v3_rows.items()):
-        score, verdict = draft_lint_v3.combine(row.answers)
-        if item_id in _ROWS:
-            verdict = claim_check.veto(verdict, [0] if _holistic_fired(item_id) else [])
+        # Через combine_with_claims, а не сборкой здесь: тест падает, если шаг отключить от рецепта.
+        score, verdict = draft_lint_v3.combine_with_claims(row.answers, _claim_answers(item_id))
         verdicts.append(Verdict(item_id, score, verdict))
     status = auto_status(verdicts, _CRITICAL)
     assert status.status == AUTO, f"auto off: пропущены {status.missed}"
+    # Обратная сторона того же гейта: на чистых base шаг не должен отнимать ready.
+    plain = {i: draft_lint_v3.combine(r.answers)[1] for i, r in v3_rows.items()}
+    lowered = [v.item_id for v in verdicts
+               if v.item_id in _BASE and plain[v.item_id] == "ready" and v.verdict != "ready"]
+    assert lowered == [], f"вето сняло ready с чистых: {lowered}"
 
 
 @pytest.mark.stress
@@ -127,3 +130,34 @@ def test_claim_check_step_alone_catches_every_critical_fixture():
 def test_claim_check_does_not_veto_clean_base_fixtures():
     assert [v.item_id for v in _verdicts_after_claim_check()
             if v.item_id in _BASE and v.verdict != "ready"] == []
+
+
+# --- бид 6qa: шаг claim-vs-evidence как часть рецепта, а не сборка в тесте ---
+
+def _clean_v3_answers() -> dict[str, Answer]:
+    """Черновик без единого стилистического дефекта: сам v3 отдал бы ready."""
+    return {qid: Answer(probability=0.0) for qid in draft_lint_v3.QUESTIONS}
+
+
+def _holistic(probability: float) -> dict[str, Answer]:
+    return {claim_check.HOLISTIC_QID: Answer(probability=probability)}
+
+
+def test_production_question_set_is_the_holistic_question_alone():
+    """Путь по утверждениям выведен из вето (0.286 ложных на реальных парах, бид sqd)."""
+    assert set(claim_check.QUESTIONS) == {claim_check.HOLISTIC_QID}
+
+
+def test_combine_with_claims_lowers_ready_when_the_holistic_question_fired():
+    score, verdict = draft_lint_v3.combine_with_claims(_clean_v3_answers(), _holistic(0.9))
+    assert verdict == "light_edit"
+    assert score == draft_lint_v3.combine(_clean_v3_answers())[0]
+
+
+def test_combine_with_claims_keeps_ready_when_nothing_fired():
+    assert draft_lint_v3.combine_with_claims(_clean_v3_answers(), _holistic(0.1))[1] == "ready"
+
+
+def test_combine_with_claims_without_claim_answers_is_plain_combine():
+    a = _clean_v3_answers()
+    assert draft_lint_v3.combine_with_claims(a, {}) == draft_lint_v3.combine(a)

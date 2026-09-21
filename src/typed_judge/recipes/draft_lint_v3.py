@@ -32,6 +32,7 @@ CoT-first (rank 2) — см. COT_FIRST_LIMITATION ниже: TypeSafe/Jev не в
 """
 from __future__ import annotations
 
+from .. import claim_check
 from ..questions import Answer, Choice, Noul, Question
 from .draft_lint import DEFECTS, READINESS
 from .draft_lint_v2 import OVERCLAIM_THRESHOLD
@@ -196,3 +197,19 @@ def combine(a: dict[str, Answer]) -> tuple[float, str]:
     if verdict == "ready" and any(a[qid].probability >= OVERCLAIM_THRESHOLD for qid in CRITICAL_DEFECTS):
         verdict = "light_edit"
     return round(score, 3), verdict
+
+
+def combine_with_claims(a: dict[str, Answer],
+                        claim_answers: dict[str, Answer]) -> tuple[float, str]:
+    """combine() + шаг claim-vs-evidence (бид q36) как часть рецепта, а не сборка в вызывающем коде.
+
+    Вопросы рецепта про качество письма: на стресс-наборе h37 сам v3 пропускает 19 из 25 критических
+    фикстур, где подменён факт, а не стиль. Шаг claim_check против источника закрывает эти 19 и на
+    чистых base не срабатывает (живой прогон 2026-09-20). Источник берётся вызывающим кодом — рецепт
+    не знает, откуда он (Source material пакета черновика, приложенные заметки).
+
+    claim_answers пустой (источника к черновику нет) — вето не применяется: молчание источника не
+    повод понижать вердикт. score шаг не трогает — он понижает только вердикт ready (бид ov0).
+    """
+    score, verdict = combine(a)
+    return score, claim_check.veto(verdict, claim_check.fired(claim_answers))
