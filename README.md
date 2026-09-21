@@ -27,7 +27,7 @@ tj variants --recipe typed_judge.recipes.draft_lint --engine fake --cache r.json
 | factor_en | heavy_edit | 0.314 |
 ```
 
-Verified in a clean venv (`uv build` → fresh `uv venv` → `uv pip install dist/typed_judge-0.2.0-py3-none-any.whl`): `tj --help` exits 0, `tj variants` above prints the same three-row table, and both optional steps below run off the installed wheel (2026-09-21, bead `c5e`).
+Verified in a clean venv (`uv build` → fresh `uv venv` → `uv pip install dist/typed_judge-0.2.1-py3-none-any.whl`): `tj --help` exits 0, `tj variants` above prints the same three-row table, and both optional steps below run off the installed wheel (2026-09-21, beads `c5e`, `jnk`).
 
 ## Numbers we measured
 

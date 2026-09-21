@@ -4,7 +4,7 @@ Numbers in this file are measured, not estimated; each one names the bead, scrip
 comes from. Where a measurement failed to support a feature, the failure is listed too — negative
 results are the point of this repo, not an embarrassment to hide in the tracker.
 
-## Unreleased
+## 0.2.1 — 2026-09-21
 
 ### Fixed
 
