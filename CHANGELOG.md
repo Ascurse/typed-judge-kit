@@ -4,9 +4,10 @@ Numbers in this file are measured, not estimated; each one names the bead, scrip
 comes from. Where a measurement failed to support a feature, the failure is listed too — negative
 results are the point of this repo, not an embarrassment to hide in the tracker.
 
-## 0.2.0 — unreleased
+## 0.2.0 — 2026-09-21
 
-`pyproject.toml` is at 0.2.0; the wheel is not built yet (bead `c5e`). `dist/` still carries 0.1.0.
+Built and verified in a clean venv (bead `c5e`): `dist/typed_judge-0.2.0-py3-none-any.whl`,
+`tj --help` exits 0, and the README demo prints its documented table byte-for-byte.
 
 ### Recipes
 
@@ -52,6 +53,14 @@ results are the point of this repo, not an embarrassment to hide in the tracker.
   with the old `combine(a)` signature never sees a second argument.
 - **`tj diff-published --vault-root <path>`** — draft ↔ published HTER proxy, split into style and
   fact edits by a regex NER filter. Candidate labels are printed for confirmation, never written.
+
+### Packaging
+
+- **The sdist no longer ships the issue tracker.** hatchling only reads the root `.gitignore`, so the
+  nested `.beads/.gitignore` did not protect it and `.beads/backup/*.darc` (Dolt dumps) went into the
+  source distribution: 945 KB, of which 803 KB was tracker state. An anchored
+  `[tool.hatch.build.targets.sdist] include` list brings it to 117 KB (bead `c5e`). The wheel was
+  never affected — 32 files, sources only.
 
 ### Calibration
 
