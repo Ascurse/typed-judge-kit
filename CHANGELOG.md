@@ -4,6 +4,16 @@ Numbers in this file are measured, not estimated; each one names the bead, scrip
 comes from. Where a measurement failed to support a feature, the failure is listed too — negative
 results are the point of this repo, not an embarrassment to hide in the tracker.
 
+## Unreleased
+
+- **Version guard in CI** (bead `iz1`) — `scripts/version_guard.py`, run on every push to `main`,
+  fails the build when `pyproject.version` is already on PyPI *and* the packaged code (`src/`,
+  `pyproject.toml`) has moved since that version's tag. This is the hole 0.2.1 below describes: the
+  guard says "no" on `e58312f` (the actual 80n state) and stays quiet on documentation commits
+  sitting on top of a released tag, which is the state the repository is in between releases. A
+  second mode, wired into `release.yml`, refuses a tag whose name disagrees with
+  `pyproject.version`. An unreachable index is reported as `SKIP`, never as "version taken".
+
 ## 0.2.1 — 2026-09-21
 
 This release carries everything an earlier draft of this file listed under 0.2.0. The version in

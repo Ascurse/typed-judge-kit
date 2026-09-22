@@ -1,0 +1,21 @@
+name: Version guard
+
+# 80n: тег v0.2.0 ушёл в PyPI, main прожил пять коммитов с кодом под тем же номером, и никто
+# не сказал об этом вслух. Проверка запускается на push в main — на теге было бы уже поздно.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  version-guard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # нужны теги и история: проверка сравнивает HEAD с коммитом тега
+      - run: python3 scripts/version_guard.py
